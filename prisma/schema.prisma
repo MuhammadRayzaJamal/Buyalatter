@@ -1,0 +1,709 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAJER
+  TELLER
+  ANGGOTA
+}
+
+enum StatusAnggota {
+  AKTIF
+  NONAKTIF
+}
+
+enum StatusVerifikasi {
+  PENDING
+  TERVERIFIKASI
+  DITOLAK
+}
+
+enum JenisSimpanan {
+  POKOK
+  WAJIB
+  SUKARELA
+}
+
+enum StatusPenarikan {
+  PENDING
+  DISETUJUI
+  DITOLAK
+}
+
+enum StatusPinjaman {
+  DIAJUKAN
+  DISETUJUI
+  DICAIRKAN
+  DITOLAK
+  LUNAS
+}
+
+enum StatusAngsuran {
+  BELUM
+  MENUNGGU_VERIFIKASI
+  LUNAS
+  TERLAMBAT
+}
+
+enum StatusPembayaran {
+  MENUNGGU
+  DITERIMA
+  DITOLAK
+  SEBAGIAN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  nama      String
+  email     String   @unique
+  password  String
+  role      Role     @default(ANGGOTA)
+  createdAt DateTime @default(now())
+
+  anggota                Anggota?
+  pencairanDiproses      Pencairan[]
+  pembayaranDiverifikasi Pembayaran[]
+  notifikasi             Notifikasi[]
+  pinjamanDibuat         Pinjaman[]           @relation("PinjamanDibuat")
+  pinjamanDisetujui      Pinjaman[]           @relation("PinjamanDisetujui")
+  resetToken             PasswordResetToken[]
+  verifikasiDiproses     VerifikasiAnggota[]  @relation("VerifikasiDiproses")
+  restrukturDiproses     Restrukturisasi[]    @relation("RestrukturDiproses")
+
+  @@index([role])
+}
+
+model Anggota {
+  id                String           @id @default(cuid())
+  userId            String           @unique
+  noAnggota         String           @unique
+  nik               String           @unique
+  alamat            String
+  noHp              String
+  tanggalMasuk      DateTime
+  status            StatusAnggota    @default(AKTIF)
+  foto              String?
+  fotoKtp           String?
+  statusVerifikasi  StatusVerifikasi @default(PENDING)
+  catatanVerifikasi String?
+  diverifikasiPada  DateTime?
+  deletedAt         DateTime?
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  simpanan   Simpanan[]
+  penarikan  Penarikan[]
+  pinjaman   Pinjaman[]
+  rekening   RekeningAnggota[]
+  pembayaran Pembayaran[]
+  mutasi     Mutasi[]
+  berkas     BerkasPrivat[]
+  kyc        VerifikasiAnggota[]
+  shu        ShuAnggota[]
+
+  @@index([status])
+  @@index([statusVerifikasi])
+  @@index([deletedAt])
+}
+
+model Simpanan {
+  id         String        @id @default(cuid())
+  anggotaId  String
+  jenis      JenisSimpanan
+  jumlah     Decimal       @db.Decimal(15, 2)
+  tanggal    DateTime      @default(now())
+  keterangan String?
+
+  anggota Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+
+  @@index([anggotaId, tanggal])
+  @@index([jenis])
+}
+
+model Penarikan {
+  id        String          @id @default(cuid())
+  anggotaId String
+  jumlah    Decimal         @db.Decimal(15, 2)
+  tanggal   DateTime        @default(now())
+  status    StatusPenarikan @default(PENDING)
+
+  anggota Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+
+  @@index([anggotaId, tanggal])
+  @@index([status])
+}
+
+model Pinjaman {
+  id               String         @id @default(cuid())
+  anggotaId        String
+  jumlah           Decimal        @db.Decimal(15, 2)
+  tenorBulan       Int
+  bungaPersen      Decimal        @db.Decimal(5, 2)
+  totalBayar       Decimal        @db.Decimal(15, 2)
+  status           StatusPinjaman @default(DIAJUKAN)
+  tanggalPengajuan DateTime       @default(now())
+  tanggalDisetujui DateTime?
+  alasan           String?
+  dibuatOlehId     String?
+  disetujuiOlehId  String?
+
+  anggota        Anggota    @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  dibuatOleh     User?      @relation("PinjamanDibuat", fields: [dibuatOlehId], references: [id])
+  disetujuiOleh  User?      @relation("PinjamanDisetujui", fields: [disetujuiOlehId], references: [id])
+  angsuran  Angsuran[]
+  pencairan Pencairan?
+  akad      AkadPinjaman?
+  restrukturisasi Restrukturisasi[]
+
+  @@index([anggotaId, status])
+  @@index([tanggalPengajuan])
+}
+
+model RekeningAnggota {
+  id         String   @id @default(cuid())
+  anggotaId  String
+  namaBank   String
+  noRekening String
+  atasNama   String
+  isUtama    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  anggota   Anggota     @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  pencairan Pencairan[]
+
+  @@index([anggotaId])
+}
+
+model RekeningKoperasi {
+  id         String  @id @default(cuid())
+  namaBank   String
+  noRekening String
+  atasNama   String
+  isAktif    Boolean @default(true)
+
+  pembayaran Pembayaran[]
+}
+
+model Pencairan {
+  id                String   @id @default(cuid())
+  pinjamanId        String   @unique
+  rekeningAnggotaId String
+  jumlahDicairkan   Decimal  @db.Decimal(15, 2)
+  biayaAdmin        Decimal  @default(0) @db.Decimal(15, 2)
+  tanggalPencairan  DateTime @default(now())
+  buktiTransferUrl  String?
+  diprosesOlehId    String
+  catatan           String?
+
+  pinjaman        Pinjaman        @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+  rekeningAnggota RekeningAnggota @relation(fields: [rekeningAnggotaId], references: [id])
+  diprosesOleh    User            @relation(fields: [diprosesOlehId], references: [id])
+
+  @@index([rekeningAnggotaId])
+}
+
+model Angsuran {
+  id                String         @id @default(cuid())
+  pinjamanId        String
+  angsuranKe        Int
+  jumlah            Decimal        @db.Decimal(15, 2)
+  denda             Decimal        @default(0) @db.Decimal(15, 2)
+  tanggalJatuhTempo DateTime
+  tanggalBayar      DateTime?
+  status            StatusAngsuran @default(BELUM)
+  kodeUnik          Int            @default(0)
+  terbayar          Decimal        @default(0) @db.Decimal(15, 2)
+
+  pinjaman   Pinjaman     @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+  pembayaran Pembayaran[]
+  notifikasi Notifikasi[]
+
+  @@unique([pinjamanId, angsuranKe])
+  @@index([status, tanggalJatuhTempo])
+}
+
+model Pembayaran {
+  id                 String           @id @default(cuid())
+  angsuranId         String
+  anggotaId          String
+  rekeningKoperasiId String
+  jumlahBayar        Decimal          @db.Decimal(15, 2)
+  dendaDibayar       Decimal          @default(0) @db.Decimal(15, 2)
+  buktiBayarUrl      String
+  tanggalBayar       DateTime         @default(now())
+  status             StatusPembayaran @default(MENUNGGU)
+  alasanTolak        String?
+  diverifikasiOlehId String?
+  tanggalVerifikasi  DateTime?
+  kodeUnik           Int              @default(0)
+  jumlahTagihan      Decimal          @default(0) @db.Decimal(15, 2)
+  jumlahTransfer     Decimal          @default(0) @db.Decimal(15, 2)
+  kelebihan          Decimal          @default(0) @db.Decimal(15, 2)
+  hashBukti          String?          @unique
+  isPelunasan        Boolean          @default(false)
+
+  angsuran         Angsuran         @relation(fields: [angsuranId], references: [id], onDelete: Cascade)
+  anggota          Anggota          @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  rekeningKoperasi RekeningKoperasi @relation(fields: [rekeningKoperasiId], references: [id])
+  diverifikasiOleh User?            @relation(fields: [diverifikasiOlehId], references: [id])
+
+  @@index([angsuranId])
+  @@index([anggotaId])
+  @@index([status])
+}
+
+model Galeri {
+  id        String   @id @default(cuid())
+  judul     String
+  deskripsi String?
+  gambarUrl String
+  kategori  String
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  @@index([kategori])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Artikel {
+  id        String   @id @default(cuid())
+  judul     String
+  slug      String   @unique
+  isi       String   @db.Text
+  gambarUrl String?
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+model Pesan {
+  id        String   @id @default(cuid())
+  nama      String
+  email     String
+  subjek    String
+  isi       String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+model Pengaturan {
+  id            String  @id @default(cuid())
+  bungaDefault  Decimal @db.Decimal(5, 2)
+  simpananPokok Decimal @db.Decimal(15, 2)
+  simpananWajib Decimal @db.Decimal(15, 2)
+
+  dendaPersenPerHari             Decimal @default(0.1) @db.Decimal(5, 2)
+  hariPengingatSebelumJatuhTempo Int     @default(3)
+  batasHariTerlambatKritis       Int     @default(30)
+
+  batasPencairanManajer Decimal @default(10000000) @db.Decimal(15, 2)
+  minPinjaman           Decimal @default(1000000) @db.Decimal(15, 2)
+  maksPinjaman          Decimal @default(50000000) @db.Decimal(15, 2)
+  minTransaksi          Decimal @default(10000) @db.Decimal(15, 2)
+  maksTransaksi         Decimal @default(100000000) @db.Decimal(15, 2)
+
+  minLamaAnggotaBulan      Int     @default(3)
+  plafonKaliSimpanan       Decimal @default(3) @db.Decimal(5, 2)
+  maksRasioAngsuranPersen  Decimal @default(30) @db.Decimal(5, 2)
+  maksHariTunggakan        Int     @default(30)
+  periodeTunggakanBulan    Int     @default(12)
+  batasDendaPersen         Decimal @default(10) @db.Decimal(5, 2)
+
+  namaInstansi    String  @default("BuyaLater")
+  deskripsiFooter String? @db.Text
+  emailCs         String?
+  teleponCs       String?
+  whatsappCs      String?
+  alamatPusat     String?
+}
+
+enum TipeNotifikasi {
+  PENGINGAT
+  TERLAMBAT
+  PENCAIRAN
+  PEMBAYARAN
+  INFO
+}
+
+model Notifikasi {
+  id           String         @id @default(cuid())
+  userId       String
+  angsuranId   String?
+  judul        String
+  pesan        String         @db.Text
+  tipe         TipeNotifikasi @default(INFO)
+  link         String?
+  sudahDibaca  Boolean        @default(false)
+  emailStatus  String?
+  createdAt    DateTime       @default(now())
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  angsuran Angsuran? @relation(fields: [angsuranId], references: [id], onDelete: Cascade)
+
+  @@index([userId, sudahDibaca, createdAt])
+  @@index([angsuranId, createdAt])
+  @@index([tipe, createdAt])
+}
+
+enum PosisiBanner {
+  HERO
+  FOOTER
+  SIDEBAR
+}
+
+model Banner {
+  id             String       @id @default(cuid())
+  judul          String
+  subjudul       String?
+  gambarUrl      String
+  linkTujuan     String?
+  teksTombol     String?
+  posisi         PosisiBanner @default(HERO)
+  urutan         Int          @default(0)
+  isAktif        Boolean      @default(true)
+  tanggalMulai   DateTime?
+  tanggalSelesai DateTime?
+
+  @@index([posisi, isAktif, urutan])
+}
+
+model Testimoni {
+  id        String  @id @default(cuid())
+  nama      String
+  pekerjaan String?
+  kota      String?
+  fotoUrl   String?
+  isi       String  @db.Text
+  rating    Int     @default(5)
+  isTampil  Boolean @default(true)
+
+  @@index([isTampil])
+}
+
+model Mitra {
+  id           String  @id @default(cuid())
+  nama         String
+  logoUrl      String
+  website      String?
+  kategori     String?
+  deskripsi    String? @db.Text
+  tahunBermitra Int?
+  urutan       Int     @default(0)
+  tingkat           TingkatMitra @default(PENDUKUNG)
+  isUnggulan        Boolean      @default(false)
+  kutipan           String?      @db.Text
+  namaPerwakilan    String?
+  jabatanPerwakilan String?
+  warnaBrand        String?
+
+  deletedAt         DateTime?
+
+  @@index([urutan])
+  @@index([deletedAt])
+}
+
+model Pencapaian {
+  id        String @id @default(cuid())
+  tahun     Int
+  judul     String
+  deskripsi String @db.Text
+  ikon      String @default("trending")
+
+  @@index([tahun])
+}
+
+model Keunggulan {
+  id        String @id @default(cuid())
+  judul     String
+  deskripsi String @db.Text
+  ikon      String @default("shield")
+  urutan    Int    @default(0)
+
+  @@index([urutan])
+}
+
+model Subscriber {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}
+
+enum TingkatMitra {
+  STRATEGIS
+  PENDUKUNG
+}
+
+enum PlatformSosial {
+  INSTAGRAM
+  FACEBOOK
+  YOUTUBE
+  TIKTOK
+  WHATSAPP
+}
+
+enum KolomFooter {
+  LAYANAN
+  PERUSAHAAN
+  BANTUAN
+}
+
+model Penghargaan {
+  id        String  @id @default(cuid())
+  judul     String
+  pemberi   String
+  tahun     Int
+  deskripsi String? @db.Text
+  ikon      String  @default("award")
+  urutan    Int     @default(0)
+
+  @@index([tahun])
+  @@index([urutan])
+}
+
+model KantorCabang {
+  id             String  @id @default(cuid())
+  nama           String
+  alamat         String
+  kota           String
+  telepon        String?
+  jamOperasional String?
+  latitude       Decimal @db.Decimal(10, 7)
+  longitude      Decimal @db.Decimal(10, 7)
+  isPusat        Boolean @default(false)
+
+  @@index([isPusat])
+}
+
+model MediaSosial {
+  id       String         @id @default(cuid())
+  platform PlatformSosial
+  url      String
+  urutan   Int            @default(0)
+  isAktif  Boolean        @default(true)
+
+  @@index([isAktif, urutan])
+}
+
+model MenuFooter {
+  id     String      @id @default(cuid())
+  kolom  KolomFooter
+  label  String
+  href   String
+  urutan Int         @default(0)
+
+  @@index([kolom, urutan])
+}
+
+model MetodePembayaran {
+  id     String @id @default(cuid())
+  nama   String
+  ikon   String @default("bank")
+  urutan Int    @default(0)
+
+  @@index([urutan])
+}
+
+enum JenisMutasi {
+  SIMPANAN
+  PENARIKAN
+  PENCAIRAN
+  ANGSURAN
+  DENDA
+  KOREKSI
+}
+
+enum ArahMutasi {
+  MASUK
+  KELUAR
+}
+
+/// Buku mutasi: append-only. Koreksi dilakukan dengan baris KOREKSI, bukan edit/hapus.
+model Mutasi {
+  id           String      @id @default(cuid())
+  anggotaId    String
+  jenis        JenisMutasi
+  arah         ArahMutasi
+  jumlah       Decimal     @db.Decimal(15, 2)
+  saldoSetelah Decimal     @db.Decimal(15, 2)
+  referensiId  String?
+  keterangan   String?
+  createdAt    DateTime    @default(now())
+
+  anggota Anggota @relation(fields: [anggotaId], references: [id], onDelete: Restrict)
+
+  @@index([anggotaId, createdAt])
+  @@index([jenis])
+  @@index([referensiId])
+}
+
+/// Jejak audit: append-only. Sengaja tanpa foreign key agar baris tidak ikut berubah saat data lain dihapus.
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  aksi      String
+  entitas   String
+  entitasId String
+  dataLama  Json?
+  dataBaru  Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+  @@index([entitas, entitasId])
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ipAddress String?
+  berhasil  Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum KategoriBerkas {
+  KTP
+  SWAFOTO
+  BUKTI_TRANSFER
+  BUKTI_BAYAR
+}
+
+/// Berkas privat (di storage/private, di luar public/). Hanya dilayani lewat /api/file/[id].
+model BerkasPrivat {
+  id             String         @id @default(uuid())
+  kategori       KategoriBerkas
+  anggotaId      String
+  namaFile       String
+  mime           String
+  ukuran         Int
+  diunggahOlehId String
+  createdAt      DateTime       @default(now())
+
+  anggota Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+
+  @@index([anggotaId, kategori])
+}
+
+enum StatusKyc {
+  MENUNGGU
+  DITERIMA
+  DITOLAK
+}
+
+/// KYC: satu baris per pengajuan; status terbaru menentukan kelayakan mengajukan pinjaman.
+model VerifikasiAnggota {
+  id                  String    @id @default(cuid())
+  anggotaId           String
+  fotoKtpPath         String
+  swafotoKtpPath      String
+  penghasilanBulanan  Decimal   @db.Decimal(15, 2)
+  pekerjaan           String
+  status              StatusKyc @default(MENUNGGU)
+  alasanTolak         String?
+  diverifikasiOlehId  String?
+  tanggalVerifikasi   DateTime?
+  createdAt           DateTime  @default(now())
+
+  anggota         Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  diverifikasiOleh User?  @relation("VerifikasiDiproses", fields: [diverifikasiOlehId], references: [id])
+
+  @@index([anggotaId, createdAt])
+  @@index([status])
+}
+
+/// Akad digital: salinan teks akad saat anggota menyetujui (bukti tidak berubah meski pengaturan berubah).
+model AkadPinjaman {
+  id           String   @id @default(cuid())
+  pinjamanId   String   @unique
+  isiAkad      String   @db.LongText
+  disetujuiPada DateTime @default(now())
+  ipAddress    String?
+  userAgent    String?
+
+  pinjaman Pinjaman @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+}
+
+enum StatusRestrukturisasi {
+  DIAJUKAN
+  DISETUJUI
+  DITOLAK
+}
+
+model Restrukturisasi {
+  id             String                @id @default(cuid())
+  pinjamanId     String
+  tenorLama      Int
+  tenorBaru      Int
+  alasan         String
+  status         StatusRestrukturisasi @default(DIAJUKAN)
+  diprosesOlehId String?
+  createdAt      DateTime              @default(now())
+  diprosesPada   DateTime?
+
+  pinjaman     Pinjaman @relation(fields: [pinjamanId], references: [id], onDelete: Cascade)
+  diprosesOleh User?    @relation("RestrukturDiproses", fields: [diprosesOlehId], references: [id])
+
+  @@index([pinjamanId, status])
+  @@index([status])
+}
+
+enum StatusShu {
+  DRAFT
+  DIBAGIKAN
+}
+
+model PeriodeShu {
+  id                  String    @id @default(cuid())
+  tahun               Int       @unique
+  totalShu            Decimal   @db.Decimal(15, 2)
+  persenJasaModal     Decimal   @db.Decimal(5, 2)
+  persenJasaPinjaman  Decimal   @db.Decimal(5, 2)
+  status              StatusShu @default(DRAFT)
+  dibagikanPada       DateTime?
+  createdAt           DateTime  @default(now())
+
+  anggota ShuAnggota[]
+}
+
+model ShuAnggota {
+  id           String  @id @default(cuid())
+  periodeId    String
+  anggotaId    String
+  jasaModal    Decimal @db.Decimal(15, 2)
+  jasaPinjaman Decimal @db.Decimal(15, 2)
+  total        Decimal @db.Decimal(15, 2)
+
+  periode PeriodeShu @relation(fields: [periodeId], references: [id], onDelete: Cascade)
+  anggota Anggota    @relation(fields: [anggotaId], references: [id], onDelete: Restrict)
+
+  @@unique([periodeId, anggotaId])
+  @@index([anggotaId])
+}

@@ -1,26 +1,98 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f9fc;
+  --foreground: #172033;
+  --primary: #1a2a6c;
+  --secondary: #1e5fc7;
+  --accent: #4fb8ec;
+  --navy: var(--primary);
+  --navy-deep: #121c4d;
+  --green: var(--secondary);
+  --sidebar-w: 16rem;
+  --line: #e3e8f1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-navy: var(--navy);
+  --color-navy-deep: var(--navy-deep);
+  --color-primary: var(--primary);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-green: var(--secondary);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-montserrat);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Tailwind v4 tidak memakai tailwind.config: keyframes dan animasi didefinisikan di sini. */
+@theme {
+  --shadow-kartu: 0 10px 30px -12px rgba(26, 42, 108, 0.18);
+  --animate-masuk: masuk 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-marquee: marquee 30s linear infinite;
+  --animate-marquee-fast: marquee 20s linear infinite;
+  --animate-marquee-reverse: marquee-reverse 34s linear infinite;
+  --animate-marquee-reverse-fast: marquee-reverse 24s linear infinite;
+
+  @keyframes marquee-reverse {
+    from {
+      transform: translateX(-50%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(-50%);
+    }
   }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-montserrat), var(--font-inter), sans-serif;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+}
+
+* {
+  border-color: var(--line);
+}
+
+::selection {
+  background: #bfdbfe;
+  color: var(--navy-deep);
+}
+
+@keyframes masuk {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Hormati preferensi pengguna: matikan animasi dan transisi. Marquee punya baris statis sendiri. */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

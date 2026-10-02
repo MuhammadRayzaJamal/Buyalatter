@@ -1,0 +1,15 @@
+import { AKSES, requireRole } from "@/lib/otorisasi";
+import { prisma } from "@/lib/prisma";
+import Image from "next/image";
+import { createGaleri, deleteGaleri, updateGaleri } from "../actions";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DeleteForm } from "@/components/ui/delete-form";
+import { Input } from "@/components/ui/input";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminGaleriPage() {
+  await requireRole(...AKSES.konten); const items = await prisma.galeri.findMany({ orderBy: { createdAt: "desc" } });
+  return <div className="space-y-8"><div><p className="text-sm font-semibold text-green">Konten publik</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Kelola galeri</h1><p className="mt-2 text-sm text-slate-500">Tambah, ubah, atau hapus dokumentasi koperasi.</p></div><Card><CardHeader><CardTitle>Tambah foto</CardTitle></CardHeader><CardContent><form action={createGaleri} className="grid gap-4 sm:grid-cols-2"><Input id="judul" label="Judul" name="judul" required /><Input id="kategori" label="Kategori" name="kategori" placeholder="Kegiatan, Rapat, atau Sosial" required /><Input accept="image/*" id="gambarFile" label="Unggah gambar" name="gambarFile" type="file" /><Input id="gambarUrl" label="Atau URL gambar (wajib jika tidak unggah file)" name="gambarUrl" placeholder="https://picsum.photos/seed/nama/1200/800" type="url" /><Input className="sm:col-span-2" id="deskripsi" label="Deskripsi" name="deskripsi" /><Button className="w-fit" type="submit">Tambah ke galeri</Button></form><p className="mt-3 text-xs text-slate-400">Unggah gambar (JPG/PNG/WEBP/GIF, maks 5MB) atau isi URL gambar sebagai alternatif.</p></CardContent></Card>{items.length ? <div className="grid gap-5 md:grid-cols-2">{items.map((item) => <Card key={item.id}><CardContent className="p-5"><Image alt={item.judul} className="mb-5 aspect-video w-full rounded-lg object-cover" height={800} src={item.gambarUrl} width={1200} /><form action={updateGaleri.bind(null, item.id)} className="space-y-3"><Input defaultValue={item.judul} id={`judul-${item.id}`} label="Judul" name="judul" required /><Input accept="image/*" id={`file-${item.id}`} label="Ganti gambar (opsional)" name="gambarFile" type="file" /><Input defaultValue={item.gambarUrl} id={`url-${item.id}`} label="Atau URL gambar" name="gambarUrl" type="url" /><div className="grid gap-3 sm:grid-cols-2"><Input defaultValue={item.kategori} id={`kategori-${item.id}`} label="Kategori" name="kategori" required /><Input defaultValue={item.deskripsi ?? ""} id={`deskripsi-${item.id}`} label="Deskripsi" name="deskripsi" /></div><Button size="sm" type="submit">Simpan</Button></form><div className="mt-3"><DeleteForm action={deleteGaleri.bind(null, item.id)} message={`Foto "${item.judul}" akan dihapus permanen dari galeri.`} title="Hapus foto galeri?" /></div></CardContent></Card>)}</div> : <Card><CardContent className="p-10 text-center text-sm text-slate-500">Belum ada foto galeri.</CardContent></Card>}</div>;
+}

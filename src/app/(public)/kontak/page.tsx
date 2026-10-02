@@ -1,0 +1,7 @@
+import { ContactForm } from "@/components/public/contact-form";
+
+export const metadata = { title: "Kontak" };
+
+export default function KontakPage() {
+  return <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 lg:grid-cols-[0.8fr_1.2fr] lg:px-8 lg:py-24"><div><p className="text-sm font-semibold text-secondary">Hubungi kami</p><h1 className="mt-4 text-4xl font-bold tracking-tight text-slate-900">Mari berbincang.</h1><p className="mt-5 leading-7 text-slate-500">Punya pertanyaan tentang keanggotaan, simpanan, atau pinjaman? Kirim pesan dan tim kami akan membantu.</p><div className="mt-10 space-y-5 text-sm"><div><p className="font-bold text-slate-800">Email</p><p className="mt-1 text-slate-500">halo@buyalatter.com</p></div><div><p className="font-bold text-slate-800">Jam layanan</p><p className="mt-1 text-slate-500">Senin–Jumat, 08.00–16.00 WIB</p></div><div><p className="font-bold text-slate-800">Lokasi</p><p className="mt-1 text-slate-500">Bandung, Jawa Barat</p></div></div></div><div className="rounded-2xl border bg-white p-6 shadow-sm lg:p-8"><h2 className="text-xl font-bold text-slate-900">Kirim pesan</h2><p className="mt-2 text-sm text-slate-500">Pesan Anda akan tersimpan dan segera ditindaklanjuti.</p><div className="mt-7"><ContactForm /></div></div></div>;
+}

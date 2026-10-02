@@ -1,0 +1,23 @@
+import Link from "next/link";
+import { AKSES, requireRole } from "@/lib/otorisasi";
+import { prisma } from "@/lib/prisma";
+import { formatTanggal, initials } from "@/lib/format";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/ui/pagination";
+import { DeleteForm } from "@/components/ui/delete-form";
+import { deleteMember } from "../actions";
+
+export const dynamic = "force-dynamic";
+
+const verifikasiVariant = { PENDING: "warning", TERVERIFIKASI: "success", DITOLAK: "danger" } as const;
+const verifikasiLabel = { PENDING: "Menunggu", TERVERIFIKASI: "Terverifikasi", DITOLAK: "Ditolak" } as const;
+
+export default async function AnggotaPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
+  const user = await requireRole(...AKSES.anggota); const bolehKelola = AKSES.anggotaKelola.includes(user.role); const params = await searchParams; const query = params.q?.trim() ?? ""; const page = Math.max(1, Number(params.page ?? 1) || 1); const pageSize = 8;
+  const where = query ? { OR: [{ noAnggota: { contains: query } }, { nik: { contains: query } }, { user: { nama: { contains: query } } }, { user: { email: { contains: query } } }] } : {};
+  const [members, total] = await Promise.all([prisma.anggota.findMany({ where, include: { user: true }, orderBy: { tanggalMasuk: "desc" }, skip: (page - 1) * pageSize, take: pageSize }), prisma.anggota.count({ where })]);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  return <div className="space-y-8"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-green">Manajemen koperasi</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Data anggota</h1><p className="mt-2 text-sm text-slate-500">Kelola data anggota dan status keanggotaannya.</p></div>{bolehKelola && <Button href="/admin/anggota/tambah">Tambah anggota</Button>}</div><Card><CardHeader><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center"><CardTitle>{total} anggota terdaftar</CardTitle><form className="flex gap-2"><input className="h-9 rounded-lg border px-3 text-sm outline-none focus:border-navy" defaultValue={query} name="q" placeholder="Cari anggota..." /><Button size="sm" type="submit">Cari</Button></form></div></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Anggota</th><th className="px-5 py-3">No. Anggota</th><th className="px-5 py-3">Bergabung</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Verifikasi</th><th className="px-5 py-3">Aksi</th></tr></thead><tbody className="divide-y divide-slate-100">{members.map((member) => <tr className="hover:bg-slate-50" key={member.id}><td className="px-5 py-4"><div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-navy">{initials(member.user.nama)}</span><div><p className="font-semibold text-slate-800">{member.user.nama}</p><p className="mt-1 text-xs text-slate-500">{member.user.email}</p></div></div></td><td className="px-5 py-4 text-slate-600">{member.noAnggota}</td><td className="px-5 py-4 text-slate-600">{formatTanggal(member.tanggalMasuk)}</td><td className="px-5 py-4"><Badge variant={member.status === "AKTIF" ? "success" : "neutral"}>{member.status}</Badge></td><td className="px-5 py-4"><Badge variant={verifikasiVariant[member.statusVerifikasi]}>{verifikasiLabel[member.statusVerifikasi]}</Badge></td><td className="px-5 py-4"><div className="flex items-center gap-3"><Link className="text-xs font-bold text-navy hover:underline" href={`/admin/anggota/${member.id}`}>Detail</Link>{bolehKelola && <><Link className="text-xs font-bold text-slate-500 hover:underline" href={`/admin/anggota/${member.id}/edit`}>Edit</Link><DeleteForm action={deleteMember.bind(null, member.id)} compact message={`Anggota ${member.user.nama} akan dinonaktifkan dan disembunyikan (soft delete); riwayat transaksinya tetap tersimpan. Ditolak jika masih ada pinjaman aktif atau saldo simpanan.`} title="Hapus anggota?" /></>}</div></td></tr>)}</tbody></table>{members.length === 0 && <p className="px-5 py-12 text-center text-sm text-slate-500">Anggota tidak ditemukan.</p>}</div><Pagination currentPage={page} totalPages={totalPages} basePath="/admin/anggota" params={{ q: query || undefined }} /></CardContent></Card></div>;
+}

@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 80" width="240" height="80" role="img" aria-label="Cendekia Edu">
+  <g transform="translate(12,20)">
+    <path d="M28 0 L56 13 L28 26 L0 13 Z" fill="#2563EB"/>
+    <path d="M12 20 V32 Q28 42 44 32 V20 L28 27 Z" fill="#1E3A8A"/>
+    <path d="M52 15 V30" stroke="#2563EB" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="52" cy="33" r="3.5" fill="#F59E0B"/>
+  </g>
+  <text x="78" y="42" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="26" font-weight="800" fill="#1E3A8A">Cendekia</text>
+  <text x="79" y="60" font-family="Montserrat, 'Segoe UI', Arial, sans-serif" font-size="11" font-weight="600" letter-spacing="4" fill="#2563EB">EDU</text>
+</svg>

@@ -1,26 +1,51 @@
 {
-  "name": "buyalatter-scaffold",
+  "name": "buyalatter",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed": "tsx prisma/seed.ts",
+    "test": "vitest",
+    "android:usb": "adb reverse tcp:3000 tcp:3000 && CAP_MODE=usb npx cap sync android && npx cap run android",
+    "android:wifi": "CAP_MODE=wifi npx cap sync android && npx cap run android",
+    "ios:sim": "CAP_MODE=usb npx cap sync ios && npx cap run ios",
+    "usb:reverse": "adb reverse tcp:3000 tcp:3000"
   },
   "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2",
+    "@prisma/client": "^6.19.3",
+    "bcrypt": "^6.0.0",
+    "lucide-react": "^1.49.0",
     "next": "16.3.7",
+    "next-auth": "^5.0.0-beta.32",
+    "node-cron": "^4.6.0",
+    "nodemailer": "^8.0.11",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "recharts": "^3.10.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/bcrypt": "^6.0.0",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
+    "prisma": "^6.19.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "tsx": "^4.23.15",
+    "typescript": "^5",
+    "vite-tsconfig-paths": "^5",
+    "vitest": "^3"
   }
 }

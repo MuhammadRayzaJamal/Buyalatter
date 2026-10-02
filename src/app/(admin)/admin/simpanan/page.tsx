@@ -1,0 +1,16 @@
+import { AKSES, requireRole } from "@/lib/otorisasi";
+import { prisma } from "@/lib/prisma";
+import { createSimpanan } from "../actions";
+import { formatRupiah, formatTanggal } from "@/lib/format";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Table } from "@/components/ui/table";
+import { AksiForm, TombolKirim } from "@/components/ui/aksi-form";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminSimpananPage() {
+  const user = await requireRole(...AKSES.simpanan); const bolehInput = AKSES.simpananInput.includes(user.role); const [members, savings] = await Promise.all([prisma.anggota.findMany({ include: { user: true }, orderBy: { noAnggota: "asc" } }), prisma.simpanan.findMany({ include: { anggota: { include: { user: true } } }, orderBy: { tanggal: "desc" }, take: 50 })]);
+  return <div className="space-y-8"><div><p className="text-sm font-semibold text-green">Transaksi keuangan</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Simpanan</h1><p className="mt-2 text-sm text-slate-500">Catat setoran simpanan anggota.</p></div>{bolehInput && <Card><CardHeader><CardTitle>Input setoran</CardTitle></CardHeader><CardContent><AksiForm resetSetelahSukses aksi={createSimpanan} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5"><label className="space-y-1.5 text-sm font-semibold text-slate-700 lg:col-span-2"><span>Anggota</span><select className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal" name="anggotaId" required><option value="">Pilih anggota</option>{members.map((member) => <option key={member.id} value={member.id}>{member.noAnggota} · {member.user.nama}</option>)}</select></label><label className="space-y-1.5 text-sm font-semibold text-slate-700"><span>Jenis</span><select className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-normal" name="jenis"><option>POKOK</option><option>WAJIB</option><option>SUKARELA</option></select></label><Input id="jumlah" label="Jumlah (Rp)" min="0.01" name="jumlah" required step="0.01" type="number" /><Input defaultValue={new Date().toISOString().slice(0, 10)} id="tanggal" label="Tanggal" name="tanggal" required type="date" /><Input className="lg:col-span-4" id="keterangan" label="Keterangan" name="keterangan" placeholder="Keterangan setoran (opsional)" /><TombolKirim className="w-fit" >Simpan setoran</TombolKirim></AksiForm></CardContent></Card>}<Card><CardHeader><CardTitle>Transaksi terbaru</CardTitle></CardHeader><CardContent className="p-0"><Table columns={[{ key: "anggota", label: "Anggota", render: (row) => <span className="font-semibold text-slate-800">{row.anggota.user.nama}</span> }, { key: "jenis", label: "Jenis", render: (row) => <Badge variant="success">{row.jenis}</Badge> }, { key: "jumlah", label: "Jumlah", render: (row) => <strong>{formatRupiah(row.jumlah)}</strong> }, { key: "tanggal", label: "Tanggal", render: (row) => formatTanggal(row.tanggal) }, { key: "keterangan", label: "Keterangan", render: (row) => row.keterangan ?? "-" }]} rows={savings} emptyMessage="Belum ada setoran simpanan." /></CardContent></Card></div>;
+}
