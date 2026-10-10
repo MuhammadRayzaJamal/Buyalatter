@@ -1,21 +1,22 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { formatRupiah, formatTanggal } from "@/lib/format";
 import { samarkanNik } from "@/lib/nik";
-import { jadwalAngsuran, dec, type MasukanUang } from "@/lib/uang";
+import { hitungPinjaman, LABEL_METODE, type MetodeBungaKode } from "@/lib/bunga";
+import { dec, type MasukanUang } from "@/lib/uang";
 
 type DataAkad = {
   pinjamanId: string;
   anggota: { nama: string; noAnggota: string; nik: string; alamat: string };
-  jumlah: MasukanUang; bungaPersen: MasukanUang; tenorBulan: number; totalBayar: MasukanUang; tanggalPersetujuan: Date;
-  dendaPersenPerHari: MasukanUang; batasDendaPersen: MasukanUang;
+  jumlah: MasukanUang; bungaPersen: MasukanUang; metodeBunga: MetodeBungaKode; biayaAdmin: MasukanUang; tenorBulan: number; tanggalPersetujuan: Date;
+  dendaPersenPerHari: MasukanUang; masaTenggang: number; batasDendaPersen: MasukanUang;
 };
 
 /** Teks akad (bahasa Indonesia). Disimpan utuh di AkadPinjaman.isiAkad saat disetujui sehingga tidak berubah meski pengaturan berubah. */
 export function susunIsiAkad(d: DataAkad) {
-  const jadwal = jadwalAngsuran(d.totalBayar, d.tenorBulan);
-  const bungaTotal = dec(d.totalBayar).minus(dec(d.jumlah));
+  const r = hitungPinjaman({ pokok: d.jumlah, bungaTahun: d.bungaPersen, tenorBulan: d.tenorBulan, metode: d.metodeBunga, biayaAdmin: d.biayaAdmin });
+  const jadwal = r.jadwal;
   const baris = [
-    "AKAD PEMBIAYAAN BUYALATER",
+    "AKAD SIMPAN PINJAM ANGGOTA BUYALATER",
     `Nomor akad: ${d.pinjamanId}`,
     `Tanggal persetujuan pinjaman: ${formatTanggal(d.tanggalPersetujuan)}`,
     "",
@@ -25,21 +26,33 @@ export function susunIsiAkad(d: DataAkad) {
     "",
     "RINCIAN PINJAMAN",
     `Pokok pinjaman      : ${formatRupiah(d.jumlah)}`,
-    `Bunga               : ${dec(d.bungaPersen).toString()}% per bulan (flat) = ${formatRupiah(bungaTotal)} selama masa pinjaman`,
+    `Jasa pinjaman       : ${dec(d.bungaPersen).toString()}% per tahun, metode ${LABEL_METODE[d.metodeBunga].split(" (")[0].toLowerCase()}`,
+    `Bunga efektif       : ${r.bungaEfektifTahun.toString()}% per tahun (termasuk biaya administrasi)`,
+    `Total jasa pinjaman : ${formatRupiah(r.totalBunga)} selama masa pinjaman`,
+    `Biaya administrasi  : ${formatRupiah(r.biayaAdmin)} (dipotong dari dana yang dicairkan)`,
+    `Dana yang diterima  : ${formatRupiah(r.danaDiterima)}`,
     `Tenor               : ${d.tenorBulan} bulan`,
-    `Total kewajiban     : ${formatRupiah(d.totalBayar)}`,
+    `Total yang dibayar  : ${formatRupiah(r.totalBayar)}`,
+    `Total biaya         : ${formatRupiah(r.totalBiaya)} (jasa pinjaman + biaya administrasi)`,
     "",
     "JADWAL ANGSURAN (jatuh tempo tiap bulan sejak tanggal pencairan)",
     ...jadwal.map((j, i) => `Angsuran ke-${String(i + 1).padStart(2, "0")}   ${formatRupiah(j)}`),
     "",
     "KETENTUAN DENDA",
-    `1. Keterlambatan dikenakan denda ${dec(d.dendaPersenPerHari).toString()}% per hari dari sisa tagihan angsuran.`,
+    `1. Denda keterlambatan ${dec(d.dendaPersenPerHari).toString()}% per hari dari angsuran yang terlambat (bukan dari total pinjaman), dikenakan setelah masa tenggang ${d.masaTenggang} hari tanpa denda.`,
     `2. Total denda selama masa pinjaman dibatasi maksimal ${dec(d.batasDendaPersen).toString()}% dari pokok pinjaman; setelah batas tercapai denda tidak bertambah.`,
     "3. Pelunasan dipercepat hanya menagih sisa pokok ditambah bunga bulan berjalan; bunga bulan berikutnya tidak ditagih.",
     "4. Setiap angsuran memiliki kode unik 3 digit yang ditambahkan ke nominal transfer untuk membantu pencocokan pembayaran.",
     "",
+    "HAK ANGGOTA",
+    "1. Memperoleh informasi biaya yang jelas sebelum menyetujui akad ini.",
+    "2. Ditagih secara beretika: hanya kepada Anggota, Senin-Sabtu pukul 08.00-20.00 WIB di luar hari libur nasional, maksimal satu pengingat per hari.",
+    "3. Menyampaikan pengaduan melalui menu Pengaduan dan memperoleh tanggapan paling lambat 10 hari kerja.",
+    "4. Pelindungan data pribadi, mengunduh salinan data, dan mengajukan penutupan akun setelah semua pinjaman lunas.",
+    "5. Mengikuti rapat anggota dan menerima sisa hasil usaha (SHU) sesuai keputusan rapat anggota.",
+    "",
     "PERNYATAAN",
-    "Dengan menyetujui akad ini, Anggota menyatakan telah membaca dan memahami seluruh isi akad, bahwa data yang diberikan benar, serta sanggup melunasi kewajiban sesuai jadwal.",
+    "Dengan menyetujui akad ini, Anggota menyatakan telah membaca dan memahami seluruh biaya dan isi akad, bahwa data yang diberikan benar, serta sanggup melunasi kewajiban sesuai jadwal.",
   ];
   return baris.join("\n");
 }

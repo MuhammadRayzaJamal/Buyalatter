@@ -2,6 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import bcrypt from "bcrypt";
+import { batasiIp } from "@/lib/batas-laju";
 import { catatAudit } from "@/lib/audit";
 import { GalatBisnis, jalankan } from "@/lib/aksi";
 import { kirimEmailResetPassword } from "@/lib/email";
@@ -15,6 +16,7 @@ const MAKS_PERMINTAAN_PER_JAM = 3;
 /** Selalu menjawab sama (email terdaftar atau tidak) agar tidak bisa dipakai menebak akun. */
 export async function mintaResetPassword(formData: FormData) {
   return jalankan(async () => {
+    await batasiIp("lupa-password", 5, 60 * 60_000);
     const { email } = lupaPasswordSchema.parse(dariForm(formData));
     const user = await prisma.user.findUnique({ where: { email }, include: { anggota: { select: { deletedAt: true } } } });
     const aktif = user && !(user.role === "ANGGOTA" && (!user.anggota || user.anggota.deletedAt));

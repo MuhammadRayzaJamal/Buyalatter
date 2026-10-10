@@ -1,10 +1,12 @@
 import { NextResponse } from "next/server";
 import { jawabanGalat } from "@/lib/aksi";
+import { batasiIp } from "@/lib/batas-laju";
 import { prisma } from "@/lib/prisma";
 import { lupaPasswordSchema } from "@/lib/validasi";
 
 export async function POST(request: Request) {
   try {
+    await batasiIp("subscribe", 5, 10 * 60_000);
     // Skema yang sama dengan validasi email di form lain (trim, huruf kecil, format, panjang).
     const { email } = lupaPasswordSchema.parse(await request.json().catch(() => ({})));
     // upsert: email yang sudah terdaftar tidak dianggap error dan tidak membocorkan daftar pelanggan.

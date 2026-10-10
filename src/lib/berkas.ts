@@ -13,6 +13,7 @@ const ATURAN: Record<KategoriBerkas, { boleh: Jenis[]; maks: number; label: stri
   SWAFOTO: { boleh: [JPEG, PNG, WEBP], maks: 5 * 1024 * 1024, label: "swafoto", pesanFormat: "Foto harus berformat JPG, PNG, atau WEBP." },
   BUKTI_TRANSFER: { boleh: [JPEG, PNG, PDF], maks: 2 * 1024 * 1024, label: "bukti transfer", pesanFormat: "Bukti harus berformat JPG, PNG, atau PDF." },
   BUKTI_BAYAR: { boleh: [JPEG, PNG, PDF], maks: 2 * 1024 * 1024, label: "bukti pembayaran", pesanFormat: "Bukti harus berformat JPG, PNG, atau PDF." },
+  PENGADUAN: { boleh: [JPEG, PNG, PDF], maks: 2 * 1024 * 1024, label: "lampiran pengaduan", pesanFormat: "Lampiran harus berformat JPG, PNG, atau PDF." },
 };
 
 export const urlBerkas = (id: string) => `/api/file/${id}`;

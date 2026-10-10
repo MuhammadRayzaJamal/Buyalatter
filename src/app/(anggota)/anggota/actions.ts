@@ -10,15 +10,18 @@ import { isAngsuranPayable } from "@/lib/angsuran";
 import { ambilIp, catatAudit } from "@/lib/audit";
 import { buangBerkasPrivat, hashBerkas, simpanBerkasPrivat } from "@/lib/berkas";
 import { hariTerlambat } from "@/lib/denda";
+import { formatRupiah } from "@/lib/format";
 import { kirimEmail } from "@/lib/email";
 import { namaSama } from "@/lib/nama";
 import { buatNotifikasi } from "@/lib/notifikasi";
 import { requireAnggota } from "@/lib/otorisasi";
-import { getBatas } from "@/lib/pengaturan";
+import { getBatas, getPengaturanTagihan } from "@/lib/pengaturan";
+import { ringkasanBiaya } from "@/lib/ringkasan-server";
+import { hitungSaldo, kunciAnggota } from "@/lib/mutasi";
 import { hitungPelunasan } from "@/lib/pelunasan";
 import { prisma } from "@/lib/prisma";
 import { dec, kodeUnikAcak } from "@/lib/uang";
-import { ajukanPembayaranSchema, akadSchema, dariForm, kycSchema, rekeningSchema, restrukturSchema, uangSchema } from "@/lib/validasi";
+import { ajukanPembayaranSchema, akadSchema, dariForm, kycSchema, pengaduanSchema, rekeningSchema, restrukturSchema, uangSchema } from "@/lib/validasi";
 
 // Semua query di sini difilter dengan anggota.id milik user yang login (cegah IDOR); data milik anggota lain dianggap tidak ada.
 
@@ -167,13 +170,14 @@ export async function setujuiAkad(pinjamanId: string, formData: FormData) {
     const d = akadSchema.parse(dariForm(formData));
     await pastikanPassword(anggota, d.password);
     const batas = await getBatas();
+    const tagihan = await getPengaturanTagihan();
     const ip = await ambilIp(); const ua = (await headers()).get("user-agent")?.slice(0, 190) ?? null;
     await prisma.$transaction(async (tx) => {
       const pinjaman = await tx.pinjaman.findFirst({ where: { id: pinjamanId, anggotaId: anggota.id }, include: { akad: true } });
       if (!pinjaman) throw new GalatBisnis("Pinjaman tidak ditemukan.");
       if (pinjaman.status !== "DISETUJUI") throw new GalatBisnis("Akad hanya dapat disetujui untuk pinjaman yang sudah disetujui manajer dan belum dicairkan.");
       if (pinjaman.akad) throw new GalatBisnis("Akad sudah disetujui sebelumnya.");
-      const isiAkad = susunIsiAkad({ pinjamanId, anggota: { nama: anggota.user.nama, noAnggota: anggota.noAnggota, nik: anggota.nik, alamat: anggota.alamat }, jumlah: pinjaman.jumlah, bungaPersen: pinjaman.bungaPersen, tenorBulan: pinjaman.tenorBulan, totalBayar: pinjaman.totalBayar, tanggalPersetujuan: pinjaman.tanggalDisetujui ?? new Date(), dendaPersenPerHari: (await tx.pengaturan.findFirst())?.dendaPersenPerHari ?? "0.1", batasDendaPersen: batas.batasDendaPersen });
+      const isiAkad = susunIsiAkad({ pinjamanId, anggota: { nama: anggota.user.nama, noAnggota: anggota.noAnggota, nik: anggota.nik, alamat: anggota.alamat }, jumlah: pinjaman.jumlah, bungaPersen: pinjaman.bungaPersen, metodeBunga: pinjaman.metodeBunga, biayaAdmin: pinjaman.biayaAdmin, tenorBulan: pinjaman.tenorBulan, tanggalPersetujuan: pinjaman.tanggalDisetujui ?? new Date(), dendaPersenPerHari: tagihan.dendaPersenPerHari, masaTenggang: tagihan.masaTenggang, batasDendaPersen: batas.batasDendaPersen });
       const akad = await tx.akadPinjaman.create({ data: { pinjamanId, isiAkad, ipAddress: ip, userAgent: ua } });
       await catatAudit(tx, { userId: anggota.userId, aksi: "CREATE", entitas: "AkadPinjaman", entitasId: akad.id, dataBaru: { pinjamanId, ipAddress: ip } });
     });
@@ -294,4 +298,88 @@ export async function tandaiSemuaDibaca() {
   const anggota = await requireAnggota();
   await prisma.notifikasi.updateMany({ where: { userId: anggota.userId, sudahDibaca: false }, data: { sudahDibaca: true } });
   revalidatePath("/anggota", "layout");
+}
+
+
+// ---------- Ringkasan biaya (pratinjau sebelum mengajukan) ----------
+export async function pratinjauPinjaman(jumlah: string, tenor: string) {
+  await requireAnggota();
+  return ringkasanBiaya(jumlah, tenor);
+}
+
+// ---------- Pengaduan (Tahap 13) ----------
+function nomorTiket(sekarang = new Date()) {
+  const tanggal = `${sekarang.getFullYear()}${String(sekarang.getMonth() + 1).padStart(2, "0")}${String(sekarang.getDate()).padStart(2, "0")}`;
+  return `PGD-${tanggal}-${String(Math.floor(1000 + Math.random() * 9000))}`;
+}
+
+async function buatPengaduan(anggota: Awaited<ReturnType<typeof requireAnggota>>, d: { kategori: "PINJAMAN" | "PENAGIHAN" | "SIMPANAN" | "LAYANAN" | "DATA"; isi: string }, formData: FormData, pinjamanId: string | null) {
+  const lampiran = formData.get("lampiran");
+  const lampiranPath = lampiran instanceof File && lampiran.size > 0 ? await simpanBerkasPrivat(lampiran, "PENGADUAN", anggota.id, anggota.userId) : null;
+  try {
+    for (let percobaan = 0; percobaan < 5; percobaan += 1) {
+      try {
+        const baru = await prisma.$transaction(async (tx) => {
+          const tiket = await tx.pengaduan.create({ data: { anggotaId: anggota.id, pinjamanId, nomorTiket: nomorTiket(), kategori: d.kategori, isi: d.isi, lampiranPath } });
+          await catatAudit(tx, { userId: anggota.userId, aksi: "CREATE", entitas: "Pengaduan", entitasId: tiket.id, dataBaru: { nomorTiket: tiket.nomorTiket, kategori: d.kategori } });
+          return tiket;
+        });
+        return baru;
+      } catch (error) {
+        if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002")) throw error;
+      }
+    }
+    throw new GalatBisnis("Gagal membuat nomor tiket. Coba lagi.");
+  } catch (error) {
+    await buangBerkasPrivat(lampiranPath);
+    throw error;
+  }
+}
+
+export async function kirimPengaduan(formData: FormData) {
+  return jalankan(async () => {
+    const anggota = await requireAnggota();
+    const d = pengaduanSchema.parse(dariForm(formData));
+    const tiket = await buatPengaduan(anggota, d, formData, null);
+    revalidatePath("/anggota/pengaduan"); revalidatePath("/admin/pengaduan");
+    return `Pengaduan diterima dengan nomor tiket ${tiket.nomorTiket}. Pengurus menanggapi paling lambat 10 hari kerja.`;
+  });
+}
+
+/** Tombol "Laporkan Penagihan Tidak Pantas" di detail pinjaman: langsung membuat pengaduan kategori PENAGIHAN. */
+export async function laporkanPenagihan(pinjamanId: string, formData: FormData) {
+  return jalankan(async () => {
+    const anggota = await requireAnggota();
+    const pinjaman = await prisma.pinjaman.findFirst({ where: { id: pinjamanId, anggotaId: anggota.id }, select: { id: true } });
+    if (!pinjaman) throw new GalatBisnis("Pinjaman tidak ditemukan.");
+    const d = pengaduanSchema.parse({ kategori: "PENAGIHAN", isi: formData.get("isi") ?? "" });
+    const tiket = await buatPengaduan(anggota, d, formData, pinjamanId);
+    revalidatePath("/anggota/pengaduan"); revalidatePath("/admin/pengaduan");
+    return `Laporan penagihan diterima dengan nomor tiket ${tiket.nomorTiket}.`;
+  });
+}
+
+// ---------- Penutupan akun (Tahap 13) ----------
+export async function ajukanPenutupanAkun(formData: FormData) {
+  return jalankan(async () => {
+    const anggota = await requireAnggota();
+    const password = String(formData.get("password") ?? "");
+    if (!password) throw new GalatBisnis("Masukkan password Anda untuk konfirmasi.");
+    await pastikanPassword(anggota, password);
+    const ip = await ambilIp();
+    const saldo = await prisma.$transaction(async (tx) => {
+      await kunciAnggota(tx, anggota.id);
+      const belumSelesai = await tx.pinjaman.count({ where: { anggotaId: anggota.id, status: { in: ["DIAJUKAN", "DISETUJUI", "DICAIRKAN"] } } });
+      if (belumSelesai > 0) throw new GalatBisnis("Akun hanya dapat ditutup setelah semua pinjaman lunas.");
+      const hasil = await tx.anggota.updateMany({ where: { id: anggota.id, ditutupPada: null }, data: { status: "NONAKTIF", ditutupPada: new Date() } });
+      if (hasil.count === 0) throw new GalatBisnis("Akun ini sudah ditutup.");
+      // Saldo simpanan dikembalikan lewat alur penarikan biasa agar tercatat di buku mutasi dan disetujui pengurus.
+      const sisa = await hitungSaldo(tx, anggota.id);
+      if (sisa.gt(0)) await tx.penarikan.create({ data: { anggotaId: anggota.id, jumlah: sisa, status: "PENDING" } });
+      await catatAudit(tx, { userId: anggota.userId, aksi: "UPDATE", entitas: "Anggota", entitasId: anggota.id, dataLama: { status: anggota.status }, dataBaru: { status: "NONAKTIF", penutupanAkun: true, saldoDikembalikan: sisa.toString(), ipAddress: ip } });
+      return sisa;
+    });
+    revalidatePath("/admin/anggota"); revalidatePath("/admin/penarikan");
+    return saldo.gt(0) ? `Akun ditutup. Pengembalian simpanan ${formatRupiah(saldo)} diajukan dan menunggu persetujuan pengurus.` : "Akun ditutup.";
+  });
 }

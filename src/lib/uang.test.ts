@@ -1,15 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { Decimal, hitungTotalBayar, jadwalAngsuran, parseUang, tambah, NOL } from "./uang";
+import { Decimal, jadwalAngsuran, parseUang, tambah, NOL } from "./uang";
 
 describe("uang (Decimal)", () => {
   it("tidak terkena galat pecahan biner", () => {
     expect(0.1 + 0.2).not.toBe(0.3);
     expect(new Decimal("0.1").plus("0.2").toString()).toBe("0.3");
-  });
-
-  it("menghitung total bayar = pokok + pokok × bunga% × tenor", () => {
-    expect(hitungTotalBayar("5000000", "1.5", 12).toString()).toBe("5900000");
-    expect(hitungTotalBayar("1000000.01", "1.5", 3).toFixed(2)).toBe("1045000.01");
   });
 
   it("jadwal angsuran berjumlah persis totalBayar (sisa pembulatan di angsuran terakhir)", () => {

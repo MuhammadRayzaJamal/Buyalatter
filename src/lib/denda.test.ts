@@ -30,3 +30,13 @@ describe("denda", () => {
     expect(decodeURIComponent(link)).toContain("Angsuran ke-2");
   });
 });
+
+describe("masa tenggang denda", () => {
+  it("tidak ada denda selama masa tenggang, lalu dihitung dari hari setelahnya", async () => {
+    const { hariKenaDenda } = await import("./denda");
+    expect(hariKenaDenda(1, 3)).toBe(0);
+    expect(hariKenaDenda(3, 3)).toBe(0);
+    expect(hariKenaDenda(4, 3)).toBe(1);
+    expect(hitungDenda("1000000", "0.05", hariKenaDenda(10, 3)).toString()).toBe("3500");
+  });
+});

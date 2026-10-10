@@ -1,7 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { pratinjauPinjaman } from "@/app/(anggota)/anggota/actions";
+import { RingkasanBiayaPinjaman } from "@/components/pinjaman/ringkasan-biaya";
+import type { TampilanRingkasan } from "@/lib/ringkasan";
 import { formatRupiah } from "@/lib/format";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -60,5 +63,20 @@ export function WithdrawalForm({ balance, min, maksInput }: { balance: string; m
 
 export function LoanApplicationForm({ min, maks }: { min: string; maks: string }) {
   const state = useSubmit("/api/anggota/pinjaman", "Pengajuan pinjaman berhasil dikirim.");
-  return <form className="space-y-4" onSubmit={state.submit}><Input id="jumlah" label={`Jumlah pinjaman (${formatRupiah(min)} – ${formatRupiah(maks)})`} max={maks} min={min} name="jumlah" placeholder="Contoh: 5000000" required step="0.01" type="number" /><Input id="tenorBulan" label="Tenor (bulan)" max="24" min="3" name="tenorBulan" placeholder="12" required type="number" /><label className="block space-y-1.5" htmlFor="alasan"><span className="block text-sm font-semibold text-slate-700">Tujuan pinjaman</span><textarea className="min-h-28 w-full rounded-lg border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-navy focus:ring-4 focus:ring-blue-100" id="alasan" name="alasan" placeholder="Jelaskan kebutuhan pinjaman" required /></label><Button disabled={state.pending} type="submit">{state.pending ? "Mengajukan..." : "Kirim pengajuan"}</Button>{state.message && <p className={`text-sm font-semibold ${state.success ? "text-green-700" : "text-red-600"}`}>{state.message}</p>}</form>;
+  const [jumlah, setJumlah] = useState("");
+  const [tenor, setTenor] = useState("12");
+  const [ringkasan, setRingkasan] = useState<TampilanRingkasan | null>(null);
+  const [galat, setGalat] = useState("");
+  // Pratinjau biaya dihitung server (sumber yang sama dengan akad) setiap jumlah/tenor berubah.
+  useEffect(() => {
+    if (!jumlah) return;
+    let batal = false;
+    const timer = setTimeout(async () => {
+      const hasil = await pratinjauPinjaman(jumlah, tenor);
+      if (batal) return;
+      if (hasil.ok) { setRingkasan(hasil.data); setGalat(""); } else { setRingkasan(null); setGalat(hasil.pesan); }
+    }, 300);
+    return () => { batal = true; clearTimeout(timer); };
+  }, [jumlah, tenor]);
+  return <form className="space-y-4" onSubmit={state.submit}><Input id="jumlah" label={`Jumlah pinjaman (${formatRupiah(min)} – ${formatRupiah(maks)})`} max={maks} min={min} name="jumlah" onChange={(e) => setJumlah(e.target.value)} placeholder="Contoh: 5000000" required step="0.01" type="number" value={jumlah} /><Input id="tenorBulan" label="Tenor (bulan)" max="24" min="3" name="tenorBulan" onChange={(e) => setTenor(e.target.value)} placeholder="12" required type="number" value={tenor} />{jumlah && ringkasan && <RingkasanBiayaPinjaman data={ringkasan} sembunyikanHak />}{jumlah && galat && <p className="text-xs text-amber-700">{galat}</p>}<label className="block space-y-1.5" htmlFor="alasan"><span className="block text-sm font-semibold text-slate-700">Tujuan pinjaman</span><textarea className="min-h-28 w-full rounded-lg border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-navy focus:ring-4 focus:ring-blue-100" id="alasan" name="alasan" placeholder="Jelaskan kebutuhan pinjaman" required /></label><Button disabled={state.pending} type="submit">{state.pending ? "Mengajukan..." : "Kirim pengajuan"}</Button>{state.message && <p className={`text-sm font-semibold ${state.success ? "text-green-700" : "text-red-600"}`}>{state.message}</p>}</form>;
 }

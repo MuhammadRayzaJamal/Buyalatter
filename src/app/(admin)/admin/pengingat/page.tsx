@@ -14,9 +14,9 @@ const emailLabel = (status: string | null) => {
   return { variant: "neutral", text: "-" } as const;
 };
 
-export default async function AdminPengingatPage({ searchParams }: { searchParams: Promise<{ page?: string; dicek?: string }> }) {
+export default async function AdminPengingatPage({ searchParams }: { searchParams: Promise<{ page?: string; dicek?: string; ditunda?: string }> }) {
   await requireRole(...AKSES.pengingat);
-  const { page: pageParam, dicek } = await searchParams; const page = Math.max(1, Number(pageParam ?? 1) || 1); const pageSize = 15;
+  const { page: pageParam, dicek, ditunda } = await searchParams; const page = Math.max(1, Number(pageParam ?? 1) || 1); const pageSize = 15;
   const where = { tipe: { in: ["PENGINGAT", "TERLAMBAT"] as ("PENGINGAT" | "TERLAMBAT")[] } };
   const [logs, total] = await Promise.all([
     prisma.notifikasi.findMany({ where, include: { user: true }, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize }),
@@ -26,7 +26,7 @@ export default async function AdminPengingatPage({ searchParams }: { searchParam
   const waktu = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short" });
   return <div className="space-y-8">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-green">Penagihan</p><h1 className="mt-1 text-3xl font-bold tracking-tight text-slate-900">Log pengingat</h1><p className="mt-2 text-sm text-slate-500">Riwayat pengingat jatuh tempo dan pemberitahuan keterlambatan yang sudah dikirim.</p></div><TombolPengecekan returnTo="/admin/pengingat" /></div>
-    <HasilPengecekan dicek={dicek} />
+    <HasilPengecekan dicek={dicek} ditunda={ditunda} />
     <Card>
       <CardHeader><CardTitle>{total} pengingat terkirim</CardTitle></CardHeader>
       <CardContent className="p-0">

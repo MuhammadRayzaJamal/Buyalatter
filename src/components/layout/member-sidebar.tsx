@@ -20,6 +20,7 @@ import {
   IconChevronsRight,
   IconHistory,
   IconLogOut,
+  IconMail,
   IconMenu,
   IconPiggyBank,
   IconReceipt,
@@ -40,6 +41,7 @@ const items = [
   { label: "Riwayat Transaksi", href: "/anggota/riwayat", icon: IconHistory },
   { label: "Buku Mutasi", href: "/anggota/mutasi", icon: IconBarChart },
   { label: "SHU", href: "/anggota/shu", icon: IconPiggyBank },
+  { label: "Pengaduan", href: "/anggota/pengaduan", icon: IconMail },
 ];
 
 export function MemberSidebar({ memberName = "Anggota", memberFoto = null, notif = { items: [], unread: 0 } }: { memberName?: string; memberFoto?: string | null; notif?: { items: NotifikasiItem[]; unread: number } }) {

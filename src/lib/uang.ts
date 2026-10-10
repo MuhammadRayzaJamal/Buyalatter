@@ -17,12 +17,6 @@ export function jumlahDiGaris(nilai: MasukanUang | null | undefined, awal: Decim
   return dec(nilai).plus(awal ?? NOL);
 }
 
-/** Total = pokok + pokok × bunga%/bulan × tenor. */
-export function hitungTotalBayar(jumlah: MasukanUang, bungaPersenPerBulan: MasukanUang, tenorBulan: number) {
-  const pokok = dec(jumlah);
-  return bulat2(pokok.plus(pokok.times(dec(bungaPersenPerBulan)).div(100).times(tenorBulan)));
-}
-
 /**
  * Jadwal angsuran: tiap angsuran dibulatkan ke bawah ke sen, sisa pembulatan ditaruh di angsuran terakhir
  * sehingga jumlah semua angsuran persis sama dengan totalBayar.

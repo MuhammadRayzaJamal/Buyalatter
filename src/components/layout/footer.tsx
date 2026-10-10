@@ -29,9 +29,9 @@ export async function Footer() {
           <div className="relative grid items-center gap-10 lg:grid-cols-[1.4fr_1fr]">
             <div>
               <h2 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">Mulai Rencanakan Keuangan Anda Hari Ini</h2>
-              <p className="mt-4 max-w-xl text-blue-50/90">Daftar gratis dan nikmati simulasi cicilan tanpa komitmen.</p>
+              <p className="mt-4 max-w-xl text-blue-50/90">Daftar sebagai anggota dan lihat simulasi cicilan beserta seluruh biayanya tanpa komitmen.</p>
               <div className="mt-8 flex flex-wrap gap-3">
-                <Link className="inline-flex h-12 items-center rounded-[10px] bg-white px-6 text-sm font-bold text-primary transition hover:bg-blue-50" href="/register">Daftar Sekarang</Link>
+                <Link className="inline-flex h-12 items-center rounded-[10px] bg-white px-6 text-sm font-bold text-primary transition hover:bg-blue-50" href="/register">Jadi Anggota</Link>
                 <Link className="inline-flex h-12 items-center rounded-[10px] border-2 border-white px-6 text-sm font-bold text-white transition hover:bg-white/10" href="/kontak">Hubungi Kami</Link>
               </div>
             </div>
@@ -82,6 +82,7 @@ export async function Footer() {
 
           <div className="border-t border-white/10 pb-24 pt-6 sm:pb-8">
             <div className="flex flex-col gap-3 text-sm text-blue-100/80 sm:flex-row sm:items-center sm:justify-between"><p>© 2026 {situs.namaInstansi}. Hak cipta dilindungi.</p><ul className="flex flex-wrap gap-x-6 gap-y-2"><li><Link className="hover:text-white" href="/syarat-ketentuan">Syarat &amp; Ketentuan</Link></li><li><Link className="hover:text-white" href="/kebijakan-privasi">Kebijakan Privasi</Link></li><li><Link className="hover:text-white" href="/keamanan">Keamanan</Link></li></ul></div>
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center"><Image alt="Logo OJK" className="h-12 w-auto shrink-0 self-start rounded-md bg-white" height={48} src="/images/logo-ojk.jpg" width={72} /><p className="text-xs leading-5 text-blue-100/80">BuyaLater adalah koperasi simpan pinjam yang hanya melayani anggota. Suku bunga mengacu pada Permenkop UKM 8/2023 dan penagihan mengikuti prinsip POJK 22/2023.</p></div>
             <p className="mt-3 text-xs text-blue-200/60">Website ini merupakan proyek tugas akademik. Seluruh data, angka, testimoni, dan mitra bersifat fiktif.</p>
           </div>
         </div>

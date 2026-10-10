@@ -29,7 +29,7 @@ export async function jalankan(fn: () => Promise<string | void>): Promise<Hasil>
 
 /** Untuk route handler JSON. */
 export function jawabanGalat(error: unknown): { pesan: string; status: number } {
-  if (error instanceof GalatBisnis) return { pesan: error.message, status: 409 };
+  if (error instanceof GalatBisnis) return { pesan: error.message, status: error.constructor.name === "GalatBatasLaju" ? 429 : 409 };
   if (error instanceof ZodError) return { pesan: error.issues[0]?.message ?? "Data tidak valid.", status: 400 };
   if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") return { pesan: "Data tersebut sudah ada (nilai unik sudah dipakai).", status: 409 };
   console.error("[api]", error);

@@ -1,12 +1,18 @@
 # Entity Relationship Diagram (ERD)
 
-## BuyaLater — Sistem Simpan Pinjam Online
+## BuyaLater — Koperasi Simpan Pinjam Digital untuk Anggota
 
-Diagram ini mencakup **seluruh model database** (Tahap 1 sampai 11B, 36 tabel; tahap 10B–10D hanya mengubah tampilan, tahap 11A menambah 5 tabel dan beberapa kolom, tahap 11B menambah 5 tabel (KYC, akad, restrukturisasi, SHU)) dan dihasilkan langsung dari [prisma/schema.prisma](../prisma/schema.prisma). Kunci: `PK` primary key, `FK` foreign key, `UK` unique. Notasi relasi Mermaid: `||` tepat satu, `|o` nol atau satu, `o{` nol atau banyak.
+Diagram ini mencakup **seluruh model database** (Tahap 1 sampai 13, 40 tabel; tahap 10B–10D hanya mengubah tampilan, tahap 11A menambah 5 tabel dan beberapa kolom, tahap 11B menambah 5 tabel (KYC, akad, restrukturisasi, SHU), tahap 13 menambah 4 tabel (`HariLibur`, `LogPenagihan`, `PersetujuanData`, `Pengaduan`) serta mengubah `Pengaturan` dan `Pinjaman`) dan dihasilkan langsung dari [prisma/schema.prisma](../prisma/schema.prisma). Tahap 14 (login Google/Apple, tampilan mobile) **tidak mengubah skema**: login sosial memakai sesi JWT dan mencocokkan email penyedia dengan `User.email`, tanpa tabel akun OAuth. Kunci: `PK` primary key, `FK` foreign key, `UK` unique. Notasi relasi Mermaid: `||` tepat satu, `|o` nol atau satu, `o{` nol atau banyak.
 
 ```mermaid
 erDiagram
     User ||--o| Anggota : "userId"
+    Anggota ||--o{ LogPenagihan : "anggotaId"
+    User ||--o{ LogPenagihan : "dikirimOlehId"
+    User ||--o{ PersetujuanData : "userId"
+    Anggota ||--o{ Pengaduan : "anggotaId"
+    Pinjaman |o--o{ Pengaduan : "pinjamanId"
+    User ||--o{ Pengaduan : "ditanganiOlehId"
     Anggota ||--o{ Simpanan : "anggotaId"
     Anggota ||--o{ Penarikan : "anggotaId"
     Anggota ||--o{ Pinjaman : "anggotaId"
@@ -58,6 +64,7 @@ erDiagram
         string catatanVerifikasi "nullable"
         datetime diverifikasiPada "nullable"
         datetime deletedAt "nullable, soft delete"
+        datetime ditutupPada "nullable, penutupan akun oleh anggota"
     }
 
     Simpanan {
@@ -82,7 +89,9 @@ erDiagram
         string anggotaId FK
         decimal jumlah "15,2"
         int tenorBulan
-        decimal bungaPersen "5,2"
+        decimal bungaPersen "5,2, bunga nominal PER TAHUN"
+        MetodeBunga metodeBunga "FLAT|MENURUN|ANUITAS, default FLAT"
+        decimal biayaAdmin "15,2, maks 1% pokok, dipotong saat pencairan"
         decimal totalBayar "15,2"
         StatusPinjaman status "default DIAJUKAN"
         datetime tanggalPengajuan
@@ -187,10 +196,15 @@ erDiagram
 
     Pengaturan {
         string id PK
-        decimal bungaDefault "5,2"
+        decimal bungaPinjamanPerTahun "5,2, default 12, maks 24 efektif"
+        decimal bungaSimpananPerTahun "5,2, default 4, maks 9"
+        MetodeBunga metodeBunga "default ANUITAS"
+        decimal biayaAdminPersen "5,2, default 1, maks 1"
         decimal simpananPokok "15,2"
         decimal simpananWajib "15,2"
-        decimal dendaPersenPerHari "5,2, default 0.1"
+        decimal dendaPersenPerHari "5,2, default 0.05"
+        int masaTenggangHari "default 3"
+        text templatePengingat "nullable, bebas kata terlarang"
         int hariPengingatSebelumJatuhTempo "default 3"
         int batasHariTerlambatKritis "default 30"
         string namaInstansi
@@ -441,6 +455,48 @@ erDiagram
         decimal jasaPinjaman "15,2"
         decimal total "15,2"
     }
+
+    HariLibur {
+        string id PK
+        date tanggal UK
+        string keterangan
+        datetime createdAt
+    }
+
+    LogPenagihan {
+        string id PK
+        string anggotaId FK
+        string angsuranId "nullable, tanpa FK agar bukti tetap ada"
+        SaluranPenagihan saluran "NOTIFIKASI|EMAIL|WHATSAPP|TELEPON"
+        text isiPesan
+        string dikirimOlehId FK "nullable, null = sistem otomatis"
+        datetime waktuKirim
+    }
+
+    PersetujuanData {
+        string id PK
+        string userId FK
+        JenisPersetujuan jenis "VERIFIKASI_IDENTITAS|PENILAIAN_KELAYAKAN|PENGIRIMAN_PENGINGAT"
+        boolean disetujui
+        string versiKebijakan
+        datetime waktu
+        string ipAddress "nullable"
+    }
+
+    Pengaduan {
+        string id PK
+        string anggotaId FK
+        string pinjamanId FK "nullable"
+        string nomorTiket UK
+        KategoriPengaduan kategori "PINJAMAN|PENAGIHAN|SIMPANAN|LAYANAN|DATA"
+        text isi
+        string lampiranPath "nullable, /api/file/id"
+        StatusPengaduan status "DITERIMA|DIPROSES|SELESAI"
+        text tanggapan "nullable"
+        string ditanganiOlehId FK "nullable"
+        datetime createdAt
+        datetime selesaiAt "nullable"
+    }
 ```
 
 ## Pengelompokan tabel
@@ -457,7 +513,8 @@ erDiagram
 | Newsletter | `Subscriber` | Email pelanggan newsletter dari footer situs (email unik). |
 | Keamanan & audit | `Mutasi`, `AuditLog`, `LoginAttempt`, `PasswordResetToken`, `BerkasPrivat` | Buku mutasi append-only, jejak audit, kunci login, reset password, dan metadata berkas privat. |
 | Pinjaman lanjutan (11B) | `VerifikasiAnggota`, `AkadPinjaman`, `Restrukturisasi`, `PeriodeShu`, `ShuAnggota` | KYC, akad digital, perpanjangan tenor, dan pembagian SHU. |
-| Konfigurasi | `Pengaturan` | Bunga default, simpanan, parameter denda dan pengingat, serta identitas & kontak situs (nama instansi, deskripsi footer, email/telepon/WhatsApp CS, alamat pusat). |
+| Koperasi close loop (13) | `HariLibur`, `LogPenagihan`, `PersetujuanData`, `Pengaduan` | Hari libur penagihan, bukti penagihan beretika, persetujuan data pribadi (UU PDP), dan pengaduan anggota. |
+| Konfigurasi | `Pengaturan` | Bunga pinjaman/simpanan per tahun, metode bunga, biaya admin, simpanan, parameter denda, masa tenggang, template pengingat, serta identitas & kontak situs (nama instansi, deskripsi footer, email/telepon/WhatsApp CS, alamat pusat). |
 
 > Tabel yang **tidak memiliki relasi foreign key** (berdiri sendiri): `Galeri`, `Artikel`, `Pesan`, `Pengaturan`, `RekeningKoperasi` (hanya direferensikan oleh `Pembayaran`), serta tabel konten Tahap 9B: `Banner`, `Testimoni`, `Mitra`, `Pencapaian`, `Keunggulan`, `Subscriber`, `Penghargaan`, `KantorCabang`, `MenuFooter`, `MediaSosial`, `MetodePembayaran`. Tabel Tahap 9B–10A sengaja tidak berelasi ke `Anggota`; `Testimoni.nama` adalah teks bebas.
 
@@ -466,7 +523,7 @@ erDiagram
 - **Berkas** (sebelum 11A; berkas sensitif kini privat, lihat Catatan keamanan): `Anggota.foto`, gambar `Galeri`/`Artikel`/`Banner`/`Testimoni`/`Mitra`, `Pencairan.buktiTransferUrl`, dan `Pembayaran.buktiBayarUrl` disimpan sebagai file publik di `public/uploads/` (atau URL eksternal). `Anggota.fotoKtp` disimpan privat di `storage/ktp/` dan hanya dapat diakses lewat `/api/anggota/[id]/ktp` setelah pemeriksaan sesi (pemilik data atau admin).
 - **Pencairan** bersifat 1:0..1 terhadap `Pinjaman`. Saat dibuat, status pinjaman menjadi `DICAIRKAN` dan jadwal `Angsuran` dibentuk (jatuh tempo pertama 1 bulan setelah tanggal pencairan).
 - **Pembayaran** 1:N terhadap `Angsuran` (beberapa percobaan jika sebelumnya `DITOLAK`). Saat dibuat, `Angsuran.status` menjadi `MENUNGGU_VERIFIKASI`. Admin menerima (`Angsuran` → `LUNAS`, `Pinjaman` → `LUNAS` jika semua angsuran lunas) atau menolak (kembali ke `BELUM`/`TERLAMBAT`).
-- **Denda & pengingat**: `cekJatuhTempo()` (cron harian 08.00 atau tombol admin) mengubah angsuran yang lewat jatuh tempo menjadi `TERLAMBAT`, menghitung `Angsuran.denda = jumlah × Pengaturan.dendaPersenPerHari% × hari terlambat`, dan membuat `Notifikasi` bertipe `PENGINGAT`/`TERLAMBAT` (maks. 1 per angsuran per hari). `Notifikasi` bertipe `INFO`/`PENCAIRAN`/`PEMBAYARAN` dibuat oleh aksi admin.
+- **Denda & pengingat**: `cekJatuhTempo()` (cron harian 08.00 atau tombol admin) mengubah angsuran yang lewat jatuh tempo menjadi `TERLAMBAT`, menghitung `Angsuran.denda = sisa angsuran × Pengaturan.dendaPersenPerHari% × (hari terlambat − masa tenggang)`, dan membuat `Notifikasi` bertipe `PENGINGAT`/`TERLAMBAT` (lihat Catatan Tahap 13 untuk jadwal dan batas pengingat). `Notifikasi` bertipe `INFO`/`PENCAIRAN`/`PEMBAYARAN` dibuat oleh aksi admin.
 - **KantorCabang**: hanya satu kantor yang boleh `isPusat = true` (kantor lain otomatis dilepas); koordinat `latitude`/`longitude` dipakai embed OpenStreetMap di `/kantor-cabang`, dan jam operasional kantor pusat tampil di footer.
 - **Footer dinamis**: `MenuFooter` (kolom `LAYANAN`/`PERUSAHAAN`/`BANTUAN`), `MediaSosial` (hanya yang `isAktif`), `MetodePembayaran`, dan kolom identitas di `Pengaturan` dibaca oleh `getSitus()`; bila kosong dipakai nilai bawaan di `src/lib/kontak.ts`. `MenuFooter.href` hanya boleh `/…` atau `https://…`.
 - **Penghargaan** ditampilkan di halaman `/tentang`.
@@ -504,7 +561,12 @@ erDiagram
 | `StatusKyc` | `MENUNGGU`, `DITERIMA`, `DITOLAK` |
 | `StatusRestrukturisasi` | `DIAJUKAN`, `DISETUJUI`, `DITOLAK` |
 | `StatusShu` | `DRAFT`, `DIBAGIKAN` |
-| `KategoriBerkas` | `KTP`, `SWAFOTO`, `BUKTI_TRANSFER`, `BUKTI_BAYAR` |
+| `KategoriBerkas` | `KTP`, `SWAFOTO`, `BUKTI_TRANSFER`, `BUKTI_BAYAR`, `PENGADUAN` |
+| `MetodeBunga` | `FLAT`, `MENURUN`, `ANUITAS` |
+| `SaluranPenagihan` | `NOTIFIKASI`, `EMAIL`, `WHATSAPP`, `TELEPON` |
+| `JenisPersetujuan` | `VERIFIKASI_IDENTITAS`, `PENILAIAN_KELAYAKAN`, `PENGIRIMAN_PENGINGAT` |
+| `KategoriPengaduan` | `PINJAMAN`, `PENAGIHAN`, `SIMPANAN`, `LAYANAN`, `DATA` |
+| `StatusPengaduan` | `DITERIMA`, `DIPROSES`, `SELESAI` |
 | `StatusAnggota` | `AKTIF`, `NONAKTIF` |
 | `StatusVerifikasi` | `PENDING`, `TERVERIFIKASI`, `DITOLAK` |
 | `JenisSimpanan` | `POKOK`, `WAJIB`, `SUKARELA` |
@@ -551,6 +613,12 @@ Arah: tabel induk (sisi "1") → tabel anak (sisi FK).
 | `User` → `Restrukturisasi` | 1 : N | `diprosesOlehId` (opsional), `onDelete: SetNull` |
 | `PeriodeShu` → `ShuAnggota` | 1 : N | `periodeId`, `onDelete: Cascade`; unik (`periodeId`, `anggotaId`) |
 | `Anggota` → `ShuAnggota` | 1 : N | `anggotaId`, `onDelete: Restrict` |
+| `Anggota` → `LogPenagihan` | 1 : N | `anggotaId`, `onDelete: Cascade` |
+| `User` → `LogPenagihan` | 1 : N | `dikirimOlehId` (opsional), `onDelete: SetNull` |
+| `User` → `PersetujuanData` | 1 : N | `userId`, `onDelete: Cascade` |
+| `Anggota` → `Pengaduan` | 1 : N | `anggotaId`, `onDelete: Cascade` |
+| `Pinjaman` → `Pengaduan` | 1 : N | `pinjamanId` (opsional), `onDelete: SetNull` |
+| `User` → `Pengaduan` | 1 : N | `ditanganiOlehId` (opsional), `onDelete: SetNull` |
 
 ## Indeks
 
@@ -578,5 +646,43 @@ Arah: tabel induk (sisi "1") → tabel anak (sisi FK).
 - `MediaSosial(isAktif, urutan)`
 - `MenuFooter(kolom, urutan)`
 - `MetodePembayaran(urutan)`
+- unique `HariLibur(tanggal)`
+- `LogPenagihan(anggotaId, waktuKirim)`, `LogPenagihan(waktuKirim)`
+- `PersetujuanData(userId, jenis)`
+- unique `Pengaduan(nomorTiket)`, `Pengaduan(anggotaId, createdAt)`, `Pengaduan(status, createdAt)`
 
-Sumber acuan: [prisma/schema.prisma](../prisma/schema.prisma). SQL penambahan tabel Tahap 9B: [prisma/sql/9b-konten-publik.sql](../prisma/sql/9b-konten-publik.sql), [9d-subscriber.sql](../prisma/sql/9d-subscriber.sql), [9e-mitra-detail.sql](../prisma/sql/9e-mitra-detail.sql), [10a-mitra-footer-kantor.sql](../prisma/sql/10a-mitra-footer-kantor.sql).
+## Catatan koperasi close loop (Tahap 13)
+
+- **Bunga per tahun**: `Pinjaman.bungaPersen` kini bunga nominal **per tahun** (data lama dikonversi ×12 oleh migrasi). `Pinjaman.metodeBunga` (FLAT/MENURUN/ANUITAS) menentukan jadwal cicilan; `Pinjaman.biayaAdmin` (maks. 1% pokok) dipotong saat pencairan. Bunga efektif per tahun = IRR arus kas (dana diterima vs cicilan) dan **ikut menghitung biaya admin**.
+- **Batas regulasi** (divalidasi di server): bunga pinjaman efektif ≤ 24%/tahun pada tenor 3–24 bulan, bunga simpanan ≤ 9%, biaya admin ≤ 1%, total denda ≤ 10% pokok. Pesan penolakan: "Melebihi batas Permenkop UKM 8/2023".
+- **Denda**: dari angsuran yang terlambat (bukan total pinjaman), baru setelah `masaTenggangHari`, bawaan 0,05%/hari.
+- **Kelayakan** bertambah: anggota aktif & terverifikasi, simpanan pokok sudah dibayar, simpanan wajib tidak menunggak > 2 bulan (jendela 12 bulan penuh terakhir).
+- **Penagihan beretika**: pengingat dari semua saluran hanya Senin–Sabtu 08.00–20.00 WIB di luar `HariLibur`, hanya ke anggota yang bersangkutan, maks. 1 per anggota per hari (dihitung dari `LogPenagihan`). Template (`Pengaturan.templatePengingat`) ditolak bila memuat kata terlarang. Tidak ada kolom kontak darurat.
+- **PersetujuanData**: tiga baris per pendaftaran (identitas, kelayakan, pengingat) dengan versi kebijakan dan IP. **Anggota.ditutupPada**: penutupan akun setelah semua pinjaman lunas; saldo simpanan diajukan sebagai `Penarikan`.
+- **Pengaduan**: target selesai 10 hari kerja (Senin–Jumat, di luar `HariLibur`); `lampiranPath` memakai `BerkasPrivat` kategori `PENGADUAN`.
+- **Kesehatan koperasi** (dihitung, tanpa tabel): pokok pinjaman beredar ÷ total simpanan; kuning > 80%, merah > 90% (persetujuan pinjaman hanya Manajer).
+
+Sumber acuan: [prisma/schema.prisma](../prisma/schema.prisma). SQL penambahan tabel Tahap 9B: [prisma/sql/9b-konten-publik.sql](../prisma/sql/9b-konten-publik.sql), [9d-subscriber.sql](../prisma/sql/9d-subscriber.sql), [9e-mitra-detail.sql](../prisma/sql/9e-mitra-detail.sql), [10a-mitra-footer-kantor.sql](../prisma/sql/10a-mitra-footer-kantor.sql). SQL Tahap 13: [13-koperasi-close-loop.sql](../prisma/sql/13-koperasi-close-loop.sql).
+
+## Akun dan data contoh untuk pengujian
+
+Bagian ini menjelaskan bagaimana data contoh (`prisma/seed.ts`) terhubung ke proses login supaya alurnya mudah ditelusuri.
+
+**Alur login dan tabel yang terlibat**
+
+1. Pengguna mengisi email dan password di `/login`.
+2. Sistem mencari `User` dengan `email` tersebut (kolom `UK`) dan membandingkan password dengan hash bcrypt di `User.password`.
+3. `User.role` (`ADMIN`, `MANAJER`, `TELLER`, `ANGGOTA`) menentukan tujuan: staf ke `/admin/dashboard`, anggota ke `/anggota/dashboard`.
+4. Untuk `ANGGOTA`, harus ada baris `Anggota` (relasi `User ||--o| Anggota`) yang tidak dihapus dan tidak ditutup; `anggotaId` disimpan di sesi JWT sehingga setiap data (`Simpanan`, `Pinjaman`, `Angsuran`, `Pembayaran`, dan lainnya) hanya dibaca untuk anggota itu.
+5. Setiap percobaan masuk dicatat di `LoginAttempt`; 5 kali gagal mengunci email tersebut selama 15 menit.
+
+**Akun contoh**
+
+| Peran | Email | Password | Baris data yang terkait |
+| --- | --- | --- | --- |
+| ADMIN | `admin@buyalatter.com` | `admin123` | `User` saja (tidak punya baris `Anggota`) |
+| MANAJER | `manajer@buyalatter.com` | `manajer123` | `User` saja |
+| TELLER | `teller@buyalatter.com` | `teller123` | `User` saja |
+| ANGGOTA | `budi.santoso@buyalatter.com` | `anggota123` | `User` → `Anggota` → `Simpanan`, `Pinjaman` (lunas), `RekeningAnggota`, `VerifikasiAnggota` |
+
+Anggota contoh lain (14 orang) memakai password `anggota123` dan memiliki kondisi data berbeda (tunggakan, pembayaran sebagian, pengajuan, dan sebagainya); daftar lengkap dan skenarionya ada di [PRD.md](PRD.md) bagian 12, "Panduan login dan alur uji untuk penguji". Seluruh tanggal transaksi contoh dihitung relatif terhadap hari seed dijalankan, sehingga pinjaman terlama berusia sekitar 8 bulan.

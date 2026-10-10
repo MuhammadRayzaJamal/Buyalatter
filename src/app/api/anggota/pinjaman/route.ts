@@ -6,7 +6,7 @@ import { kunciAnggota } from "@/lib/mutasi";
 import { cobaAnggota } from "@/lib/otorisasi";
 import { getBatas } from "@/lib/pengaturan";
 import { prisma } from "@/lib/prisma";
-import { hitungTotalBayar } from "@/lib/uang";
+import { hitungPinjaman } from "@/lib/bunga";
 import { buatPinjamanSchema } from "@/lib/validasi";
 
 export async function POST(request: Request) {
@@ -28,8 +28,8 @@ export async function POST(request: Request) {
       const rekeningUtama = await tx.rekeningAnggota.findFirst({ where: { anggotaId: anggota.id, isUtama: true } });
       if (!rekeningUtama) throw new GalatBisnis("Tambahkan rekening bank utama terlebih dahulu sebelum mengajukan pinjaman.");
       // Bunga dan total selalu dihitung server dengan Decimal dari Pengaturan, tidak pernah dari klien.
-      const totalBayar = hitungTotalBayar(d.jumlah, batas.bungaDefault, d.tenorBulan);
-      const baru = await tx.pinjaman.create({ data: { anggotaId: anggota.id, jumlah: d.jumlah, tenorBulan: d.tenorBulan, bungaPersen: batas.bungaDefault, totalBayar, alasan: d.alasan, dibuatOlehId: anggota.userId } });
+      const r = hitungPinjaman({ pokok: d.jumlah, bungaTahun: batas.bungaPinjamanPerTahun, tenorBulan: d.tenorBulan, metode: batas.metodeBunga, biayaAdminPersen: batas.biayaAdminPersen });
+      const baru = await tx.pinjaman.create({ data: { anggotaId: anggota.id, jumlah: d.jumlah, tenorBulan: d.tenorBulan, bungaPersen: batas.bungaPinjamanPerTahun, metodeBunga: batas.metodeBunga, biayaAdmin: r.biayaAdmin, totalBayar: r.totalBayar, alasan: d.alasan, dibuatOlehId: anggota.userId } });
       await catatAudit(tx, { userId: anggota.userId, aksi: "CREATE", entitas: "Pinjaman", entitasId: baru.id, dataBaru: baru });
     });
     return NextResponse.json({ message: "Pengajuan pinjaman berhasil dikirim." });

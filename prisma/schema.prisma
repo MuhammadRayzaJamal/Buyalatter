@@ -76,6 +76,9 @@ model User {
   resetToken             PasswordResetToken[]
   verifikasiDiproses     VerifikasiAnggota[]  @relation("VerifikasiDiproses")
   restrukturDiproses     Restrukturisasi[]    @relation("RestrukturDiproses")
+  persetujuanData        PersetujuanData[]
+  pengaduanDitangani     Pengaduan[]          @relation("PengaduanDitangani")
+  penagihanDikirim       LogPenagihan[]       @relation("PenagihanDikirim")
 
   @@index([role])
 }
@@ -95,6 +98,7 @@ model Anggota {
   catatanVerifikasi String?
   diverifikasiPada  DateTime?
   deletedAt         DateTime?
+  ditutupPada       DateTime?
 
   user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
   simpanan   Simpanan[]
@@ -106,6 +110,8 @@ model Anggota {
   berkas     BerkasPrivat[]
   kyc        VerifikasiAnggota[]
   shu        ShuAnggota[]
+  pengaduan  Pengaduan[]
+  logPenagihan LogPenagihan[]
 
   @@index([status])
   @@index([statusVerifikasi])
@@ -144,7 +150,11 @@ model Pinjaman {
   anggotaId        String
   jumlah           Decimal        @db.Decimal(15, 2)
   tenorBulan       Int
+  /// Bunga nominal PER TAHUN (%). Sebelum Tahap 13 kolom ini berisi bunga per bulan.
   bungaPersen      Decimal        @db.Decimal(5, 2)
+  metodeBunga      MetodeBunga    @default(FLAT)
+  /// Biaya administrasi (maks. 1% pokok), dipotong dari dana yang dicairkan.
+  biayaAdmin       Decimal        @default(0) @db.Decimal(15, 2)
   totalBayar       Decimal        @db.Decimal(15, 2)
   status           StatusPinjaman @default(DIAJUKAN)
   tanggalPengajuan DateTime       @default(now())
@@ -160,6 +170,7 @@ model Pinjaman {
   pencairan Pencairan?
   akad      AkadPinjaman?
   restrukturisasi Restrukturisasi[]
+  pengaduan       Pengaduan[]
 
   @@index([anggotaId, status])
   @@index([tanggalPengajuan])
@@ -298,11 +309,16 @@ model Pesan {
 
 model Pengaturan {
   id            String  @id @default(cuid())
-  bungaDefault  Decimal @db.Decimal(5, 2)
   simpananPokok Decimal @db.Decimal(15, 2)
   simpananWajib Decimal @db.Decimal(15, 2)
 
-  dendaPersenPerHari             Decimal @default(0.1) @db.Decimal(5, 2)
+  bungaPinjamanPerTahun Decimal     @default(12) @db.Decimal(5, 2)
+  bungaSimpananPerTahun Decimal     @default(4) @db.Decimal(5, 2)
+  metodeBunga           MetodeBunga @default(ANUITAS)
+  biayaAdminPersen      Decimal     @default(1) @db.Decimal(5, 2)
+
+  dendaPersenPerHari             Decimal @default(0.05) @db.Decimal(5, 2)
+  masaTenggangHari               Int     @default(3)
   hariPengingatSebelumJatuhTempo Int     @default(3)
   batasHariTerlambatKritis       Int     @default(30)
 
@@ -325,6 +341,14 @@ model Pengaturan {
   teleponCs       String?
   whatsappCs      String?
   alamatPusat     String?
+
+  templatePengingat String? @db.Text
+}
+
+enum MetodeBunga {
+  FLAT
+  MENURUN
+  ANUITAS
 }
 
 enum TipeNotifikasi {
@@ -594,6 +618,7 @@ enum KategoriBerkas {
   SWAFOTO
   BUKTI_TRANSFER
   BUKTI_BAYAR
+  PENGADUAN
 }
 
 /// Berkas privat (di storage/private, di luar public/). Hanya dilayani lewat /api/file/[id].
@@ -706,4 +731,95 @@ model ShuAnggota {
 
   @@unique([periodeId, anggotaId])
   @@index([anggotaId])
+}
+
+// ---------- Tahap 13: koperasi close loop ----------
+
+/// Hari libur nasional/cuti bersama; penagihan dan target tanggapan pengaduan tidak dihitung pada hari ini.
+model HariLibur {
+  id         String   @id @default(cuid())
+  tanggal    DateTime @unique @db.Date
+  keterangan String
+  createdAt  DateTime @default(now())
+}
+
+enum SaluranPenagihan {
+  NOTIFIKASI
+  EMAIL
+  WHATSAPP
+  TELEPON
+}
+
+/// Bukti setiap pengingat/penagihan yang dikirim ke anggota (hanya ke anggota yang bersangkutan).
+model LogPenagihan {
+  id           String           @id @default(cuid())
+  anggotaId    String
+  angsuranId   String?
+  saluran      SaluranPenagihan
+  isiPesan     String           @db.Text
+  dikirimOlehId String?
+  waktuKirim   DateTime         @default(now())
+
+  anggota     Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  dikirimOleh User?   @relation("PenagihanDikirim", fields: [dikirimOlehId], references: [id])
+
+  @@index([anggotaId, waktuKirim])
+  @@index([waktuKirim])
+}
+
+enum JenisPersetujuan {
+  VERIFIKASI_IDENTITAS
+  PENILAIAN_KELAYAKAN
+  PENGIRIMAN_PENGINGAT
+}
+
+/// Persetujuan penggunaan data pribadi (UU PDP): satu baris per jenis per pendaftaran.
+model PersetujuanData {
+  id             String           @id @default(cuid())
+  userId         String
+  jenis          JenisPersetujuan
+  disetujui      Boolean
+  versiKebijakan String
+  waktu          DateTime         @default(now())
+  ipAddress      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, jenis])
+}
+
+enum KategoriPengaduan {
+  PINJAMAN
+  PENAGIHAN
+  SIMPANAN
+  LAYANAN
+  DATA
+}
+
+enum StatusPengaduan {
+  DITERIMA
+  DIPROSES
+  SELESAI
+}
+
+model Pengaduan {
+  id              String            @id @default(cuid())
+  anggotaId       String
+  pinjamanId      String?
+  nomorTiket      String            @unique
+  kategori        KategoriPengaduan
+  isi             String            @db.Text
+  lampiranPath    String?
+  status          StatusPengaduan   @default(DITERIMA)
+  tanggapan       String?           @db.Text
+  ditanganiOlehId String?
+  createdAt       DateTime          @default(now())
+  selesaiAt       DateTime?
+
+  anggota       Anggota   @relation(fields: [anggotaId], references: [id], onDelete: Cascade)
+  pinjaman      Pinjaman? @relation(fields: [pinjamanId], references: [id], onDelete: SetNull)
+  ditanganiOleh User?     @relation("PengaduanDitangani", fields: [ditanganiOlehId], references: [id])
+
+  @@index([anggotaId, createdAt])
+  @@index([status, createdAt])
 }

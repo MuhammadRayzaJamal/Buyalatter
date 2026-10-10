@@ -50,8 +50,8 @@ export default async function AdminPencairanDetailPage({ params }: { params: Pro
           <AksiForm aksi={prosesPencairan.bind(null, pinjaman.id)} className="space-y-4">
             <input name="rekeningAnggotaId" type="hidden" value={rekeningUtama.id} />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input defaultValue={pinjaman.jumlah.toString()} id="jumlahDicairkan" label="Jumlah dicairkan (Rp)" min="0.01" name="jumlahDicairkan" required step="0.01" type="number" />
-              <Input defaultValue="0" id="biayaAdmin" label="Biaya admin (Rp)" min="0" name="biayaAdmin" step="0.01" type="number" />
+              <Input defaultValue={pinjaman.jumlah.minus(pinjaman.biayaAdmin).toString()} id="jumlahDicairkan" label="Jumlah dicairkan (Rp) — pokok dikurangi biaya admin" name="jumlahDicairkan" readOnly required step="0.01" type="number" />
+              <Input defaultValue={pinjaman.biayaAdmin.toString()} id="biayaAdmin" label="Biaya admin (Rp) — sesuai ringkasan akad" name="biayaAdmin" readOnly step="0.01" type="number" />
             </div>
             <p className="rounded-lg bg-blue-50 px-4 py-3 text-xs leading-5 text-slate-600">Pencairan di atas <strong>{formatRupiah(batas.batasPencairanManajer)}</strong> wajib diproses oleh <strong>Manajer</strong>{user.role !== "MANAJER" && pinjaman.jumlah.gt(batas.batasPencairanManajer) ? " — akun Anda bukan Manajer, sistem akan menolak." : "."}</p>
             <Input accept="image/*,application/pdf" id="buktiTransfer" label="Bukti transfer (JPG/PNG/PDF, maks 2MB)" name="buktiTransfer" type="file" />

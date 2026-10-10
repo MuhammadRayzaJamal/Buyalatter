@@ -4,24 +4,35 @@ import { copyFile, mkdir, unlink } from "node:fs/promises";
 import path from "node:path";
 import { PrismaClient, Prisma, type ArahMutasi, type JenisMutasi } from "@prisma/client";
 import { susunIsiAkad } from "../src/lib/akad";
-import { hitungDenda } from "../src/lib/denda";
+import { hariKenaDenda, hitungDenda } from "../src/lib/denda";
+import { hitungPinjaman } from "../src/lib/bunga";
+import { VERSI_KEBIJAKAN } from "../src/lib/kebijakan";
+import { buatDataDemoTunggakan } from "./demo-tunggakan";
 import { alokasiPembayaran } from "../src/lib/pelunasan";
 import { hitungPembagianShu } from "../src/lib/shu";
-import { hitungTotalBayar, jadwalAngsuran } from "../src/lib/uang";
 
 const prisma = new PrismaClient();
 
 const uang = (nilai: number) => new Prisma.Decimal(nilai.toFixed(2));
 type Uang = Prisma.Decimal;
 type SimpananSeed = Omit<Prisma.SimpananCreateManyInput, "jumlah"> & { jumlah: Uang; id: string; tanggal: Date; keterangan: string };
-type PinjamanSeed = Omit<Prisma.PinjamanCreateManyInput, "jumlah" | "totalBayar" | "bungaPersen" | "tanggalDisetujui"> & { tanggalDisetujui: Date | null; id: string; anggotaId: string; jumlah: Uang; totalBayar: Uang; bungaPersen: Uang };
+type PinjamanSeed = Omit<Prisma.PinjamanCreateManyInput, "jumlah" | "totalBayar" | "bungaPersen" | "biayaAdmin" | "tanggalDisetujui"> & { tanggalDisetujui: Date | null; id: string; anggotaId: string; jumlah: Uang; totalBayar: Uang; bungaPersen: Uang; biayaAdmin: Uang };
 type AngsuranSeed = Omit<Prisma.AngsuranCreateManyInput, "jumlah" | "denda" | "terbayar" | "tanggalJatuhTempo" | "tanggalBayar"> & { id: string; tanggalJatuhTempo: Date; tanggalBayar: Date | null; jumlah: Uang; denda: Uang; terbayar: Uang; kodeUnik: number };
 const nomor3 = (index: number) => String(index + 1).padStart(3, "0");
 const tanggal = (tahun: number, bulan: number, hari: number) =>
   new Date(Date.UTC(tahun, bulan - 1, hari));
 
 const HARI_MS = 24 * 60 * 60 * 1000;
-const DENDA_PERSEN_PER_HARI = 0.1;
+// Semua tanggal transaksi dibuat relatif terhadap hari ini supaya data demo selalu terasa baru.
+const HARI_INI = new Date();
+const hariLalu = (n: number) => new Date(Date.UTC(HARI_INI.getUTCFullYear(), HARI_INI.getUTCMonth(), HARI_INI.getUTCDate() - n));
+// Pinjaman yang belum dicairkan: berapa hari lalu diajukan. Yang LUNAS: berapa hari lalu dicairkan (tenor 6 bulan, selesai 1–2 bulan lalu).
+const HARI_PENGAJUAN_BELUM_CAIR: Record<number, number> = { 2: 4, 3: 28, 4: 6, 7: 2, 8: 17, 9: 5 };
+const HARI_PENCAIRAN_LUNAS: Record<number, number> = { 0: 250, 5: 205 };
+const DENDA_PERSEN_PER_HARI = 0.05;
+const MASA_TENGGANG_HARI = 3;
+const BUNGA_PINJAMAN_TAHUN = 12;
+const BIAYA_ADMIN_PERSEN = 1;
 const geserBulan = (dasar: Date, bulan: number) => {
   const hasil = new Date(dasar);
   hasil.setUTCMonth(hasil.getUTCMonth() + bulan);
@@ -68,6 +79,9 @@ async function main() {
   const berkasLama = await prisma.berkasPrivat.findMany({ where: { anggotaId: { startsWith: "seed-" } } });
   for (const b of berkasLama) await unlink(path.join(process.cwd(), "storage", "private", b.kategori.toLowerCase(), b.namaFile)).catch(() => undefined);
 
+  // Akun demo tunggakan (id "demo-") merujuk user seed lewat pencairan; hapus dulu, dibuat ulang di akhir seed.
+  await prisma.user.deleteMany({ where: { id: { startsWith: "demo-" } } });
+
   await prisma.$transaction(async (tx) => {
     // Buku mutasi dan audit log append-only di aplikasi; seed memakai klien mentah sehingga boleh mengosongkannya untuk data demo.
     await tx.mutasi.deleteMany({ where: { anggotaId: { startsWith: "seed-" } } });
@@ -75,6 +89,7 @@ async function main() {
     await tx.shuAnggota.deleteMany({ where: { OR: [{ anggotaId: { startsWith: "seed-" } }, { periodeId: { startsWith: "seed-" } }] } });
     await tx.periodeShu.deleteMany({ where: { OR: [{ id: { startsWith: "seed-" } }, { tahun: { in: [2025, 2026] } }] } });
     await tx.auditLog.deleteMany({});
+    await tx.hariLibur.deleteMany({ where: { id: { startsWith: "seed-" } } });
     await tx.loginAttempt.deleteMany({});
     await tx.passwordResetToken.deleteMany({});
     await tx.penghargaan.deleteMany({ where: { id: { startsWith: "seed-" } } });
@@ -88,7 +103,8 @@ async function main() {
     await tx.pencapaian.deleteMany({ where: { id: { startsWith: "seed-" } } });
     await tx.keunggulan.deleteMany({ where: { id: { startsWith: "seed-" } } });
     await tx.notifikasi.deleteMany({ where: { id: { startsWith: "seed-" } } });
-    await tx.pencairan.deleteMany({ where: { id: { startsWith: "seed-" } } });
+    // Pencairan hasil uji lewat UI (id acak) pada anggota seed ikut dihapus agar rekening seed bisa dihapus.
+    await tx.pencairan.deleteMany({ where: { OR: [{ id: { startsWith: "seed-" } }, { pinjaman: { anggotaId: { startsWith: "seed-" } } }] } });
     await tx.angsuran.deleteMany({ where: { id: { startsWith: "seed-" } } });
     await tx.pinjaman.deleteMany({ where: { id: { startsWith: "seed-" } } });
     await tx.rekeningAnggota.deleteMany({ where: { id: { startsWith: "seed-" } } });
@@ -150,7 +166,10 @@ async function main() {
     }
 
     const simpanan: SimpananSeed[] = [];
-    const jumlahBulanWajib = [12, 11, 10, 9, 8, 7, 12, 10, 9, 8, 7, 6, 9, 8, 6];
+    // Simpanan wajib 12 bulan penuh terakhir. Anggota ke-5, ke-9, ke-12, dan ke-14 sengaja menunggak (1, 2, 4, dan 5 bulan terakhir)
+    // untuk mendemokan syarat "tidak menunggak simpanan wajib lebih dari 2 bulan" (anggota ke-12 dan ke-14 tidak lolos).
+    const tunggakanWajibSeed = [0, 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 4, 0, 5, 0];
+    const sekarangSeed = new Date();
     for (const [index, anggotaItem] of anggota.entries()) {
       const nomor = String(index + 1).padStart(3, "0");
       simpanan.push({
@@ -158,18 +177,21 @@ async function main() {
         anggotaId: anggotaItem.id,
         jenis: "POKOK" as const,
         jumlah: uang(100000),
-        tanggal: tanggal(2023, 3 + (index % 6), 15),
+        tanggal: anggotaItem.tanggalMasuk,
         keterangan: "Simpanan pokok anggota",
       });
 
-      for (let bulan = 0; bulan < jumlahBulanWajib[index]; bulan += 1) {
+      for (let mundur = 12; mundur >= 1; mundur -= 1) {
+        if (mundur <= tunggakanWajibSeed[index]) continue; // bulan terbaru yang belum dibayar
+        const tanggalBayar = new Date(sekarangSeed.getFullYear(), sekarangSeed.getMonth() - mundur, 5 + (index % 5));
+        if (tanggalBayar < anggotaItem.tanggalMasuk) continue;
         simpanan.push({
-          id: `seed-simpanan-${nomor}-wajib-${String(bulan + 1).padStart(2, "0")}`,
+          id: `seed-simpanan-${nomor}-wajib-${tanggalBayar.getFullYear()}-${String(tanggalBayar.getMonth() + 1).padStart(2, "0")}`,
           anggotaId: anggotaItem.id,
           jenis: "WAJIB" as const,
           jumlah: uang(50000),
-          tanggal: tanggal(2025, bulan + 1, 5 + (index % 5)),
-          keterangan: `Simpanan wajib bulan ${bulan + 1}`,
+          tanggal: tanggalBayar,
+          keterangan: `Simpanan wajib ${new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric" }).format(tanggalBayar)}`,
         });
       }
 
@@ -178,7 +200,7 @@ async function main() {
         anggotaId: anggotaItem.id,
         jenis: "SUKARELA" as const,
         jumlah: uang(150000 + index * 25000),
-        tanggal: tanggal(2025, 8 + (index % 4), 12),
+        tanggal: hariLalu(20 + index * 9),
         keterangan: "Simpanan sukarela anggota",
       });
     }
@@ -222,11 +244,16 @@ async function main() {
       const nomor = String(index + 1).padStart(2, "0");
       // Pinjaman index 4 sengaja di atas batas Rp 10.000.000 untuk mendemokan aturan "pencairan wajib Manajer".
       const jumlah = index === 4 ? 12000000 : 3000000 + index * 750000;
-      const tenorBulan = [6, 10, 8, 12, 6, 10, 12, 8, 6, 10, 6][index];
-      const bungaPersen = 1.5;
-      const totalBayar = hitungTotalBayar(jumlah, bungaPersen, tenorBulan);
+      const tenorBulan = [6, 10, 8, 12, 6, 6, 8, 8, 6, 10, 6][index];
+      const rincian = hitungPinjaman({ pokok: jumlah, bungaTahun: BUNGA_PINJAMAN_TAHUN, tenorBulan, metode: "ANUITAS", biayaAdminPersen: BIAYA_ADMIN_PERSEN });
+      const totalBayar = rincian.totalBayar;
       const status = pinjamanStatus[index];
-      const tanggalPengajuan = tanggal(2025, index + 1, 10 + (index % 10));
+      const sudahDibayarAwal = status === "LUNAS" ? tenorBulan : Math.max(1, index % tenorBulan);
+      const tanggalCair = status === "DICAIRKAN"
+        ? geserBulan(new Date(Date.now() + (OFFSET_HARI_TAGIHAN[index] ?? 0) * HARI_MS), -(sudahDibayarAwal + 1))
+        : status === "LUNAS" ? hariLalu(HARI_PENCAIRAN_LUNAS[index]) : null;
+      const tanggalPengajuan = tanggalCair ? new Date(tanggalCair.getTime() - 10 * HARI_MS) : hariLalu(HARI_PENGAJUAN_BELUM_CAIR[index]);
+      const tanggalSetuju = tanggalCair ? new Date(tanggalCair.getTime() - 3 * HARI_MS) : status === "DISETUJUI" ? hariLalu(Math.max(1, HARI_PENGAJUAN_BELUM_CAIR[index] - 3)) : null;
       const pinjamanId = `seed-pinjaman-${nomor}`;
       const sudahDicairkan = status === "DICAIRKAN" || status === "LUNAS";
 
@@ -235,21 +262,22 @@ async function main() {
         anggotaId: anggota[index].id,
         jumlah: uang(jumlah),
         tenorBulan,
-        bungaPersen: uang(bungaPersen),
+        bungaPersen: uang(BUNGA_PINJAMAN_TAHUN),
+        metodeBunga: "ANUITAS",
+        biayaAdmin: rincian.biayaAdmin,
         totalBayar,
         dibuatOlehId: index === 2 ? "seed-user-manajer" : `seed-user-anggota-${nomor3(index)}`,
         disetujuiOlehId: status === "DIAJUKAN" ? null : "seed-user-manajer",
         status,
         tanggalPengajuan,
-        tanggalDisetujui: status === "DISETUJUI" || sudahDicairkan ? tanggal(2025, index + 1, 20) : null,
+        tanggalDisetujui: tanggalSetuju,
         alasan: status === "DITOLAK" ? "Dokumen pengajuan belum memenuhi persyaratan." : "Kebutuhan modal usaha anggota.",
       });
 
       if (sudahDicairkan) {
-        const biayaAdmin = 25000;
-        const sudahDibayar = status === "LUNAS" ? tenorBulan : Math.max(1, index % tenorBulan);
-        const jatuhTempoBelumLunas = new Date(Date.now() + (OFFSET_HARI_TAGIHAN[index] ?? 0) * HARI_MS);
-        const tanggalPencairan = status === "DICAIRKAN" ? geserBulan(jatuhTempoBelumLunas, -(sudahDibayar + 1)) : tanggal(2025, index + 1, 23);
+        const biayaAdmin = rincian.biayaAdmin.toNumber();
+        const sudahDibayar = sudahDibayarAwal;
+        const tanggalPencairan = tanggalCair!;
         pencairan.push({
           id: `seed-pencairan-${nomor}`,
           pinjamanId,
@@ -262,7 +290,7 @@ async function main() {
           catatan: null,
         });
 
-        const jadwal = jadwalAngsuran(totalBayar, tenorBulan);
+        const jadwal = rincian.jadwal;
         for (let urutan = 1; urutan <= tenorBulan; urutan += 1) {
           const jatuhTempo = geserBulan(tanggalPencairan, urutan);
           const lunas = urutan <= sudahDibayar;
@@ -275,10 +303,10 @@ async function main() {
             jumlah: jadwal[urutan - 1],
             tanggalJatuhTempo: jatuhTempo,
             tanggalBayar: lunas ? new Date(jatuhTempo.getTime() - 5 * 24 * 60 * 60 * 1000) : null,
-            denda: terlambat ? hitungDenda(jadwal[urutan - 1], DENDA_PERSEN_PER_HARI, hariLewat) : uang(0),
+            denda: terlambat ? hitungDenda(jadwal[urutan - 1], DENDA_PERSEN_PER_HARI, hariKenaDenda(hariLewat, MASA_TENGGANG_HARI)) : uang(0),
             status: lunas ? ("LUNAS" as const) : terlambat ? ("TERLAMBAT" as const) : ("BELUM" as const),
             kodeUnik: 100 + ((index + 3) * 137 + urutan * 53) % 900,
-            terbayar: lunas ? jadwal[urutan - 1].plus(terlambat ? hitungDenda(jadwal[urutan - 1], DENDA_PERSEN_PER_HARI, hariLewat) : 0) : uang(0),
+            terbayar: lunas ? jadwal[urutan - 1].plus(terlambat ? hitungDenda(jadwal[urutan - 1], DENDA_PERSEN_PER_HARI, hariKenaDenda(hariLewat, MASA_TENGGANG_HARI)) : 0) : uang(0),
           });
         }
       }
@@ -304,12 +332,12 @@ async function main() {
     }
 
     // Akad digital: pinjaman berjalan/lunas dan satu pinjaman DISETUJUI (index 9). Index 4 (Rp 12 juta) sengaja belum berakad.
-    const pengaturanSeed = { dendaPersenPerHari: DENDA_PERSEN_PER_HARI, batasDendaPersen: 10 };
+    const pengaturanSeed = { dendaPersenPerHari: DENDA_PERSEN_PER_HARI, masaTenggang: MASA_TENGGANG_HARI, batasDendaPersen: 10 };
     for (const pj of pinjaman) {
       const i = Number((pj.id as string).slice(-2)) - 1;
       if (!(["DICAIRKAN", "LUNAS"].includes(String(pj.status)) || i === 9)) continue;
       const a = anggota[i]; const profil = anggotaData[i];
-      const isiAkad = susunIsiAkad({ pinjamanId: pj.id, anggota: { nama: profil[0], noAnggota: a.noAnggota, nik: a.nik, alamat: a.alamat }, jumlah: pj.jumlah, bungaPersen: pj.bungaPersen, tenorBulan: pj.tenorBulan, totalBayar: pj.totalBayar, tanggalPersetujuan: pj.tanggalDisetujui ?? new Date(), dendaPersenPerHari: pengaturanSeed.dendaPersenPerHari, batasDendaPersen: pengaturanSeed.batasDendaPersen });
+      const isiAkad = susunIsiAkad({ pinjamanId: pj.id, anggota: { nama: profil[0], noAnggota: a.noAnggota, nik: a.nik, alamat: a.alamat }, jumlah: pj.jumlah, bungaPersen: pj.bungaPersen, metodeBunga: "ANUITAS", biayaAdmin: pj.biayaAdmin, tenorBulan: pj.tenorBulan, tanggalPersetujuan: pj.tanggalDisetujui ?? new Date(), dendaPersenPerHari: pengaturanSeed.dendaPersenPerHari, masaTenggang: pengaturanSeed.masaTenggang, batasDendaPersen: pengaturanSeed.batasDendaPersen });
       await tx.akadPinjaman.create({ data: { id: `seed-akad-${nomor3(i)}`, pinjamanId: pj.id, isiAkad, disetujuiPada: pj.tanggalDisetujui ?? new Date(), ipAddress: "127.0.0.1", userAgent: "Seed demo" } });
     }
 
@@ -362,11 +390,11 @@ async function main() {
       const kategoriItem = kategori[index % kategori.length];
       return {
         id: `seed-galeri-${nomor}`,
-        judul: `${kategoriItem} BuyaLater ${2024 + (index % 3)}`,
+        judul: `${kategoriItem} BuyaLater ${HARI_INI.getUTCFullYear()}`,
         deskripsi: `Dokumentasi ${kategoriItem.toLowerCase()} bersama anggota BuyaLater.`,
         gambarUrl: `https://picsum.photos/seed/buyalatter-${kategoriItem.toLowerCase()}-${nomor}/1200/800`,
         kategori: kategoriItem,
-        createdAt: tanggal(2024 + (index % 3), 2 + (index % 10), 8 + (index % 15)),
+        createdAt: hariLalu(12 + index * 13),
       };
     });
     await tx.galeri.createMany({ data: galeri });
@@ -378,14 +406,18 @@ async function main() {
         slug,
         isi,
         gambarUrl,
-        createdAt: tanggal(2026, index + 1, 5 + index),
+        createdAt: hariLalu(6 + index * 9),
       })),
     });
 
     await tx.pengaturan.create({
       data: {
         id: "seed-pengaturan",
-        bungaDefault: uang(1.5),
+        bungaPinjamanPerTahun: uang(BUNGA_PINJAMAN_TAHUN),
+        bungaSimpananPerTahun: uang(4),
+        metodeBunga: "ANUITAS",
+        biayaAdminPersen: uang(BIAYA_ADMIN_PERSEN),
+        masaTenggangHari: MASA_TENGGANG_HARI,
         simpananPokok: uang(100000),
         simpananWajib: uang(50000),
         dendaPersenPerHari: uang(DENDA_PERSEN_PER_HARI),
@@ -403,7 +435,7 @@ async function main() {
         hariPengingatSebelumJatuhTempo: 3,
         batasHariTerlambatKritis: 30,
         namaInstansi: "BuyaLater",
-        deskripsiFooter: "BuyaLater adalah layanan simpan pinjam online yang membantu anggota menabung dan meminjam dengan mudah, aman, dan transparan.",
+        deskripsiFooter: "BuyaLater adalah koperasi simpan pinjam digital yang hanya melayani anggota: menabung bersama, meminjam dengan biaya yang jelas, dan keuntungan kembali ke anggota lewat SHU.",
         emailCs: "halo@buyalater.id",
         teleponCs: "(021) 1234-5678",
         whatsappCs: "0812-3456-7890",
@@ -414,10 +446,10 @@ async function main() {
     const hariIni = Date.now();
     await tx.banner.createMany({
       data: [
-        { id: "seed-banner-01", judul: "Pinjaman Mudah, Cicilan Ringan", subjudul: "Ajukan pinjaman online dan pantau angsuran langsung dari portal anggota.", gambarUrl: "https://picsum.photos/seed/buyalater-banner-01/1600/600", linkTujuan: "/simulasi-pinjaman", teksTombol: "Coba Simulasi", posisi: "HERO", urutan: 1, isAktif: true, tanggalMulai: new Date(hariIni - 30 * HARI_MS), tanggalSelesai: new Date(hariIni + 60 * HARI_MS) },
-        { id: "seed-banner-02", judul: "Gabung Jadi Anggota BuyaLater", subjudul: "Daftar gratis, verifikasi cepat, mulai menabung hari ini.", gambarUrl: "https://picsum.photos/seed/buyalater-banner-02/1600/600", linkTujuan: "/register", teksTombol: "Daftar Sekarang", posisi: "HERO", urutan: 2, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
+        { id: "seed-banner-01", judul: "Simpan Pinjam untuk Anggota, Biaya Jelas", subjudul: "Lihat ringkasan seluruh biaya sebelum akad dan pantau angsuran dari portal anggota.", gambarUrl: "https://picsum.photos/seed/buyalater-banner-01/1600/600", linkTujuan: "/simulasi-pinjaman", teksTombol: "Coba Simulasi", posisi: "HERO", urutan: 1, isAktif: true, tanggalMulai: new Date(hariIni - 30 * HARI_MS), tanggalSelesai: new Date(hariIni + 60 * HARI_MS) },
+        { id: "seed-banner-02", judul: "Gabung Jadi Anggota BuyaLater", subjudul: "Daftar sebagai anggota, lengkapi verifikasi, dan mulai menabung bersama.", gambarUrl: "https://picsum.photos/seed/buyalater-banner-02/1600/600", linkTujuan: "/register", teksTombol: "Daftar Sekarang", posisi: "HERO", urutan: 2, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
         { id: "seed-banner-03", judul: "Promo Akhir Tahun (contoh berakhir)", subjudul: "Banner ini sudah lewat masa tayang sehingga tidak muncul di situs.", gambarUrl: "https://picsum.photos/seed/buyalater-banner-03/1600/600", linkTujuan: "/layanan/pinjaman", teksTombol: "Lihat Promo", posisi: "HERO", urutan: 3, isAktif: true, tanggalMulai: new Date(hariIni - 90 * HARI_MS), tanggalSelesai: new Date(hariIni - 10 * HARI_MS) },
-        { id: "seed-banner-10", judul: "Promo Anggota Baru", subjudul: "Bunga spesial mulai 0,8% per bulan untuk pinjaman pertama Anda.", gambarUrl: "https://picsum.photos/seed/buyalater-promo-1/800/500", linkTujuan: "/register", teksTombol: "Daftar Sekarang", posisi: "FOOTER", urutan: 1, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
+        { id: "seed-banner-10", judul: "Info Anggota Baru", subjudul: "Bunga dinyatakan per tahun beserta bunga efektifnya. Jadilah anggota dan lihat rinciannya.", gambarUrl: "https://picsum.photos/seed/buyalater-promo-1/800/500", linkTujuan: "/register", teksTombol: "Daftar Sekarang", posisi: "FOOTER", urutan: 1, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
         { id: "seed-banner-11", judul: "Pinjaman Pendidikan", subjudul: "Tahun ajaran baru? Siapkan biaya sekolah dengan cicilan ringan.", gambarUrl: "https://picsum.photos/seed/buyalater-promo-2/800/500", linkTujuan: "/layanan/pinjaman", teksTombol: "Lihat Detail", posisi: "FOOTER", urutan: 2, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
         { id: "seed-banner-12", judul: "Rajin Menabung, Untung Berlipat", subjudul: "Simpanan sukarela dengan bagi hasil kompetitif setiap akhir tahun.", gambarUrl: "https://picsum.photos/seed/buyalater-promo-3/800/500", linkTujuan: "/layanan/simpanan", teksTombol: "Mulai Menabung", posisi: "FOOTER", urutan: 3, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
         { id: "seed-banner-13", judul: "Hitung Dulu, Baru Pinjam", subjudul: "Coba simulasi cicilan dan temukan tenor yang paling pas.", gambarUrl: "https://picsum.photos/seed/buyalater-promo-4/800/500", linkTujuan: "/simulasi-pinjaman", teksTombol: "Coba Simulasi", posisi: "FOOTER", urutan: 4, isAktif: true, tanggalMulai: null, tanggalSelesai: null },
@@ -429,7 +461,7 @@ async function main() {
       data: [
         ["Siti Rahmawati", "Pemilik Warung Makan", 5, "Modal dari BuyaLater bikin warung saya bisa tambah etalase. Cicilannya ringan dan admin-nya ramah."],
         ["Andi Pratama", "Karyawan Swasta", 5, "Pengingat jatuh temponya membantu banget, saya jadi nggak pernah telat bayar."],
-        ["Dewi Lestari", "Guru Honorer", 5, "Pinjaman pendidikan untuk kuliah adik saya cair dalam sehari. Terima kasih BuyaLater!"],
+        ["Dewi Lestari", "Guru Honorer", 5, "Pinjaman pendidikan untuk kuliah adik saya dibantu pengurus dengan sabar. Terima kasih BuyaLater!"],
         ["Budi Santoso", "Pengrajin Mebel", 5, "Semua biayanya jelas dari awal, tidak ada potongan mendadak."],
         ["Rina Marlina", "Ibu Rumah Tangga", 5, "Simpanan sukarela di sini bikin saya lebih rajin menabung."],
         ["Fajar Nugroho", "Mahasiswa", 4, "Daftarnya gampang, tampilannya juga mudah dipahami."],
@@ -449,7 +481,7 @@ async function main() {
       data: [
         ["Koperasi Digital Terbaik 2025", "Forum Koperasi Nusantara", 2025, "Penghargaan untuk koperasi dengan layanan digital paling inovatif.", "trophy"],
         ["Layanan Anggota Terfavorit 2025", "Komunitas Fintech Rakyat", 2025, "Dipilih langsung oleh anggota berdasarkan kepuasan layanan.", "award"],
-        ["Inovasi Simpan Pinjam 2024", "Ekspo Ekonomi Kreatif", 2024, "Pengakuan atas inovasi pengajuan dan pembayaran pinjaman online.", "medal"],
+        ["Inovasi Simpan Pinjam 2024", "Ekspo Ekonomi Kreatif", 2024, "Pengakuan atas inovasi pengajuan dan pembayaran angsuran secara digital bagi anggota.", "medal"],
         ["Zero Data Breach 3 Tahun Berturut-turut", "Audit Internal Perisai Data", 2025, "Tidak ada insiden kebocoran data selama tiga tahun berturut-turut.", "medal"],
       ].map(([judul, pemberi, tahun, deskripsi, ikon], index) => ({ id: `seed-penghargaan-${index + 1}`, judul: String(judul), pemberi: String(pemberi), tahun: Number(tahun), deskripsi: String(deskripsi), ikon: String(ikon), urutan: index + 1 })),
     });
@@ -471,9 +503,9 @@ async function main() {
     });
     await tx.menuFooter.createMany({
       data: [
-        ["LAYANAN", "Simpanan", "/layanan/simpanan"], ["LAYANAN", "Pinjaman", "/layanan/pinjaman"], ["LAYANAN", "Simulasi Cicilan", "/simulasi-pinjaman"], ["LAYANAN", "Galeri", "/galeri"],
+        ["LAYANAN", "Simpanan", "/layanan/simpanan"], ["LAYANAN", "Pinjaman", "/layanan/pinjaman"], ["LAYANAN", "Simulasi Biaya Pinjaman", "/simulasi-pinjaman"], ["LAYANAN", "Galeri", "/galeri"],
         ["PERUSAHAAN", "Tentang Kami", "/tentang"], ["PERUSAHAAN", "Mitra", "/mitra"], ["PERUSAHAAN", "Kantor Cabang", "/kantor-cabang"], ["PERUSAHAAN", "Berita", "/berita"],
-        ["BANTUAN", "FAQ", "/faq"], ["BANTUAN", "Hubungi Kami", "/kontak"], ["BANTUAN", "Keamanan", "/keamanan"], ["BANTUAN", "Syarat & Ketentuan", "/syarat-ketentuan"], ["BANTUAN", "Kebijakan Privasi", "/kebijakan-privasi"],
+        ["BANTUAN", "FAQ", "/faq"], ["BANTUAN", "Hak Anggota", "/hak-anggota"], ["BANTUAN", "Hubungi Kami", "/kontak"], ["BANTUAN", "Keamanan", "/keamanan"], ["BANTUAN", "Syarat & Ketentuan", "/syarat-ketentuan"], ["BANTUAN", "Kebijakan Privasi", "/kebijakan-privasi"],
       ].map(([kolom, label, href], index) => ({ id: `seed-menu-${index + 1}`, kolom: kolom as "LAYANAN" | "PERUSAHAAN" | "BANTUAN", label, href, urutan: index + 1 })),
     });
     await tx.metodePembayaran.createMany({
@@ -483,19 +515,19 @@ async function main() {
       data: [
         [2022, "Berdiri", "Koperasi dirintis dengan 25 anggota pertama.", "flag"],
         [2023, "Tumbuh", "Anggota mencapai 500 orang.", "users"],
-        [2024, "Go Digital", "Meluncurkan platform online BuyaLater.", "smartphone"],
+        [2024, "Go Digital", "Meluncurkan platform digital BuyaLater untuk anggota.", "smartphone"],
         [2025, "Berkembang", "Dana tersalurkan menembus Rp 5 miliar.", "trending"],
-        [2026, "Terus Melayani", "Menghadirkan fitur pengingat dan pembayaran online.", "bell"],
+        [2026, "Terus Melayani", "Menghadirkan akad digital, pengaduan anggota, dan penagihan beretika.", "bell"],
       ].map(([tahun, judul, deskripsi, ikon], index) => ({ id: `seed-pencapaian-${index + 1}`, tahun: Number(tahun), judul: String(judul), deskripsi: String(deskripsi), ikon: String(ikon) })),
     });
     await tx.keunggulan.createMany({
       data: [
-        ["Proses Cepat", "Pengajuan online dalam hitungan menit, dana cair maksimal 1x24 jam setelah disetujui.", "zap"],
-        ["Bunga Ringan & Transparan", "Semua biaya ditampilkan di awal. Yang Anda lihat di simulasi, itu yang Anda bayar.", "percent"],
+        ["Khusus Anggota", "Layanan hanya untuk anggota terverifikasi. Keuntungan kembali ke anggota lewat SHU.", "zap"],
+        ["Bunga per Tahun yang Transparan", "Bunga dinyatakan per tahun beserta bunga efektifnya, maksimal 24% per tahun. Ringkasan biaya tampil sebelum akad.", "percent"],
         ["Tenor Fleksibel", "Pilih jangka waktu 3 hingga 24 bulan sesuai kemampuan Anda.", "calendar-range"],
-        ["Aman & Terlindungi", "Data pribadi Anda dienkripsi dan tidak pernah dibagikan ke pihak lain.", "shield"],
-        ["Pengingat Otomatis", "Notifikasi sebelum jatuh tempo agar Anda tidak pernah telat bayar.", "bell"],
-        ["Semangat Kekeluargaan", "Kami bukan sekadar pemberi pinjaman, kami tumbuh bersama anggota.", "heart-handshake"],
+        ["Aman & Terlindungi", "Data pribadi Anda dilindungi dan tidak pernah dibagikan ke keluarga, kontak darurat, atau tempat kerja.", "shield"],
+        ["Penagihan Beretika", "Pengingat hanya kepada Anda, Senin–Sabtu 08.00–20.00 WIB, tanpa ancaman.", "bell"],
+        ["Musyawarah & Kekeluargaan", "Kami bukan pemberi pinjaman biasa, kami koperasi yang tumbuh bersama anggota.", "heart-handshake"],
       ].map(([judul, deskripsi, ikon], index) => ({ id: `seed-keunggulan-${index + 1}`, judul, deskripsi, ikon, urutan: index + 1 })),
     });
 
@@ -527,6 +559,41 @@ async function main() {
     }
     await tx.mutasi.createMany({ data: barisMutasi });
 
+    // ===== Tahap 13: hari libur 2026, persetujuan data, pengaduan, log penagihan =====
+    // Hari libur nasional dan cuti bersama 2026 (SKB 3 Menteri). Admin dapat menyesuaikan di /admin/hari-libur.
+    const libur2026: [string, string][] = [
+      ["2026-01-01", "Tahun Baru Masehi"], ["2026-01-16", "Isra Mikraj Nabi Muhammad SAW"], ["2026-02-16", "Cuti Bersama Tahun Baru Imlek"], ["2026-02-17", "Tahun Baru Imlek 2577 Kongzili"],
+      ["2026-03-18", "Cuti Bersama Hari Suci Nyepi"], ["2026-03-19", "Hari Suci Nyepi Tahun Baru Saka 1948"], ["2026-03-20", "Cuti Bersama Idul Fitri 1447 H"], ["2026-03-21", "Hari Raya Idul Fitri 1447 H"],
+      ["2026-03-22", "Hari Raya Idul Fitri 1447 H"], ["2026-03-23", "Cuti Bersama Idul Fitri 1447 H"], ["2026-03-24", "Cuti Bersama Idul Fitri 1447 H"], ["2026-04-03", "Wafat Yesus Kristus"],
+      ["2026-04-05", "Kebangkitan Yesus Kristus (Paskah)"], ["2026-05-01", "Hari Buruh Internasional"], ["2026-05-14", "Kenaikan Yesus Kristus"], ["2026-05-15", "Cuti Bersama Kenaikan Yesus Kristus"],
+      ["2026-05-27", "Hari Raya Idul Adha 1447 H"], ["2026-05-28", "Cuti Bersama Idul Adha 1447 H"], ["2026-05-31", "Hari Raya Waisak 2570 BE"], ["2026-06-01", "Hari Lahir Pancasila"],
+      ["2026-06-16", "Tahun Baru Islam 1448 H"], ["2026-08-17", "Hari Kemerdekaan Republik Indonesia"], ["2026-08-25", "Maulid Nabi Muhammad SAW"], ["2026-12-24", "Cuti Bersama Natal"], ["2026-12-25", "Hari Raya Natal"],
+    ];
+    await tx.hariLibur.createMany({ data: libur2026.map(([tanggalLibur, keterangan], index) => ({ id: `seed-libur-${String(index + 1).padStart(2, "0")}`, tanggal: new Date(`${tanggalLibur}T00:00:00Z`), keterangan })) });
+
+    // Tiga persetujuan data terpisah untuk setiap anggota seed, dicatat saat tanggal bergabung.
+    await tx.persetujuanData.createMany({ data: anggota.flatMap((a) => (["VERIFIKASI_IDENTITAS", "PENILAIAN_KELAYAKAN", "PENGIRIMAN_PENGINGAT"] as const).map((jenis) => ({ userId: a.userId, jenis, disetujui: true, versiKebijakan: VERSI_KEBIJAKAN, waktu: a.tanggalMasuk, ipAddress: "127.0.0.1" }))) });
+
+    // Pengaduan contoh: satu sudah lewat 10 hari kerja (merah), satu selesai, satu baru diterima, satu laporan penagihan.
+    await tx.pengaduan.createMany({
+      data: [
+        { id: "seed-pengaduan-01", anggotaId: "seed-anggota-002", nomorTiket: "PGD-SEED-0001", kategori: "PINJAMAN", isi: "Saya ingin menanyakan rincian denda angsuran ke-2 yang terlambat dan kemungkinan keringanan.", status: "DIPROSES", tanggapan: "Pengurus sedang menghitung ulang rincian denda dan akan menghubungi Anda.", ditanganiOlehId: "seed-user-manajer", createdAt: new Date(Date.now() - 20 * HARI_MS) },
+        { id: "seed-pengaduan-02", anggotaId: "seed-anggota-001", nomorTiket: "PGD-SEED-0002", kategori: "SIMPANAN", isi: "Setoran simpanan wajib bulan lalu belum tercatat di buku mutasi.", status: "SELESAI", tanggapan: "Sudah dicek: setoran tercatat pada tanggal 5. Mohon periksa kembali menu Buku Mutasi.", ditanganiOlehId: "seed-user-admin", createdAt: new Date(Date.now() - 12 * HARI_MS), selesaiAt: new Date(Date.now() - 9 * HARI_MS) },
+        { id: "seed-pengaduan-03", anggotaId: "seed-anggota-007", nomorTiket: "PGD-SEED-0003", kategori: "LAYANAN", isi: "Halaman pembayaran sempat lambat saat mengunggah bukti transfer.", createdAt: new Date(Date.now() - 2 * HARI_MS) },
+        { id: "seed-pengaduan-04", anggotaId: "seed-anggota-007", pinjamanId: "seed-pinjaman-07", nomorTiket: "PGD-SEED-0004", kategori: "PENAGIHAN", isi: "Pengingat dikirim pada hari Minggu malam. Mohon ditinjau.", createdAt: new Date(Date.now() - HARI_MS) },
+      ],
+    });
+
+    // Log penagihan contoh: pengingat otomatis (sistem) dan WhatsApp oleh Manajer, selalu ke anggota yang bersangkutan.
+    await tx.logPenagihan.createMany({
+      data: [
+        { id: "seed-log-01", anggotaId: "seed-anggota-002", angsuranId: "seed-angsuran-02-02", saluran: "NOTIFIKASI", isiPesan: "Angsuran ke-2 terlambat. Denda saat ini sudah dihitung setelah masa tenggang. Jika ada kendala, silakan hubungi pengurus untuk dibicarakan secara kekeluargaan.", dikirimOlehId: null, waktuKirim: new Date(Date.now() - 3 * HARI_MS) },
+        { id: "seed-log-02", anggotaId: "seed-anggota-007", angsuranId: "seed-angsuran-07-07", saluran: "WHATSAPP", isiPesan: "Halo Agus Setiawan, ini pengingat ramah dari Koperasi BuyaLater.\nAngsuran ke-7 jatuh tempo dan belum tercatat. Mohon lakukan pembayaran melalui portal anggota. Jika ada kendala, silakan hubungi pengurus untuk dibicarakan secara kekeluargaan. Terima kasih.", dikirimOlehId: "seed-user-manajer", waktuKirim: new Date(Date.now() - 2 * HARI_MS) },
+        { id: "seed-log-03", anggotaId: "seed-anggota-011", angsuranId: "seed-angsuran-11-05", saluran: "NOTIFIKASI", isiPesan: "Angsuran ke-5 segera jatuh tempo. Mohon siapkan pembayaran melalui portal anggota.", dikirimOlehId: null, waktuKirim: new Date(Date.now() - HARI_MS) },
+        { id: "seed-log-04", anggotaId: "seed-anggota-011", angsuranId: "seed-angsuran-11-05", saluran: "EMAIL", isiPesan: "[Pengingat] Angsuran ke-5 — BuyaLater. Mohon siapkan pembayaran melalui portal anggota.", dikirimOlehId: null, waktuKirim: new Date(Date.now() - HARI_MS) },
+      ],
+    });
+
     // Contoh jejak audit agar halaman /admin/audit-log tidak kosong.
     await tx.auditLog.createMany({
       data: pencairan.slice(0, 3).flatMap((c, i) => [
@@ -546,11 +613,13 @@ async function main() {
     });
   });
 
+  await buatDataDemoTunggakan(prisma);
+
   console.log("Seed BuyaLater berhasil dibuat.");
   console.log("Admin: admin@buyalatter.com / admin123");
   console.log("Manajer: manajer@buyalatter.com / manajer123");
   console.log("Teller: teller@buyalatter.com / teller123");
-  console.log("Anggota: 15 akun / password anggota123");
+  console.log("Anggota: 15 akun + 4 akun demo tunggakan (rizmi/rayza/lail/fatih@buyalatter.com) / password anggota123");
 }
 
 main()

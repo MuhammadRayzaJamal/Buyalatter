@@ -49,3 +49,8 @@ next-env.d.ts
 # private uploads (KTP, etc.) — never publicly served or committed
 /storage/*
 !/storage/.gitkeep
+
+# berkas konfigurasi asisten AI (tidak dipakai di proyek ini)
+/AGENTS.md
+/CLAUDE.md
+/.claude/

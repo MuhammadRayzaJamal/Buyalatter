@@ -2,14 +2,14 @@
 
 ## BuyaLater
 
-**Versi:** 2.6  
-**Tanggal:** 1 Oktober 2026  
+**Versi:** 2.9  
+**Tanggal:** 10 Oktober 2026  
 **Status:** Implementasi MVP akademik  
 **Bahasa produk:** Bahasa Indonesia
 
 ## 1. Ringkasan Produk
 
-BuyaLater adalah aplikasi web Sistem Simpan Pinjam koperasi untuk membantu pengurus mengelola anggota, simpanan, penarikan, pinjaman, pencairan, angsuran, penagihan, konten informasi, dan laporan keuangan. Anggota dapat melihat kondisi keuangan pribadi, mengajukan layanan koperasi, membayar angsuran, dan menerima pengingat secara digital.
+BuyaLater adalah **Koperasi Simpan Pinjam Digital untuk Anggota** (close loop: hanya melayani anggota terverifikasi, bukan pinjaman online), mengacu pada Permenkop UKM 8/2023 untuk suku bunga dan mengadopsi prinsip pelindungan konsumen POJK 22/2023. Aplikasi web ini membantu membantu pengurus mengelola anggota, simpanan, penarikan, pinjaman, pencairan, angsuran, penagihan, konten informasi, dan laporan keuangan. Anggota dapat melihat kondisi keuangan pribadi, mengajukan layanan koperasi, membayar angsuran, dan menerima pengingat secara digital.
 
 Produk berjalan pada localhost menggunakan Next.js App Router, TypeScript, Tailwind CSS v4, Prisma ORM, MySQL/MariaDB XAMPP, NextAuth Credentials, bcrypt, node-cron (jadwal harian), Nodemailer (email, Mailtrap sandbox), dan lucide-react (ikon).
 
@@ -38,7 +38,7 @@ Produk berjalan pada localhost menggunakan Next.js App Router, TypeScript, Tailw
 
 ### Indikator keberhasilan
 
-- Tersedia 76 route halaman (20 publik, 18 anggota, 38 admin) ditambah route API.
+- Tersedia 79 route halaman (21 publik, 19 anggota, 39 admin) ditambah route API.
 - Semua menu internal mengarah ke route yang tersedia.
 - Data halaman transaksi berasal dari MySQL melalui Prisma.
 - Admin dan anggota hanya dapat mengakses area sesuai role.
@@ -51,7 +51,7 @@ Produk berjalan pada localhost menggunakan Next.js App Router, TypeScript, Tailw
 
 ### Termasuk
 
-- Autentikasi email/password berbasis NextAuth Credentials.
+- Autentikasi email/password berbasis NextAuth Credentials, ditambah login Google dan Apple (opsional, hanya untuk anggota terdaftar).
 - Empat peran: `ADMIN`, `MANAJER`, `TELLER`, dan `ANGGOTA`.
 - CRUD admin menggunakan Server Actions.
 - Dashboard dan laporan berbasis data database.
@@ -140,20 +140,21 @@ Proteksi route dilakukan oleh `src/proxy.ts`. Route penanda-baca notifikasi (`/a
 | `/tentang` | Cerita, visi, misi, empat nilai, timeline pencapaian (tabel), penghargaan (tabel), kartu tim (diisi di `src/lib/tim.ts`) |
 | `/layanan/simpanan` | Penjelasan pokok, wajib, dan sukarela |
 | `/layanan/pinjaman` | Alur dan ketentuan layanan pinjaman |
-| `/simulasi-pinjaman` | Kalkulator jumlah, tenor, bunga, dan estimasi angsuran |
+| `/simulasi-pinjaman` | Simulasi jumlah dan tenor; menampilkan Ringkasan Biaya lengkap (bunga per tahun, bunga efektif, total bunga, biaya admin, total bayar, cicilan, denda) dihitung server dengan rumus yang sama dengan akad |
 | `/galeri` | Grid foto, filter kategori, lightbox |
 | `/galeri/[id]` | Detail foto galeri |
 | `/berita` | Daftar artikel dinamis |
 | `/berita/[slug]` | Detail artikel dinamis |
 | `/faq` | Pertanyaan umum koperasi |
 | `/kontak` | Form pesan tersimpan ke tabel `Pesan` |
-| `/login` | Login Credentials |
+| `/login` | Login email/password, plus tombol Google (web) dan Apple (hanya perangkat iOS) bila kredensialnya diisi |
 | `/register` | Pendaftaran anggota baru, wajib unggah foto KTP untuk diverifikasi admin |
 | `/mitra` | Bergaya sama dengan beranda (latar navy gelap): sorotan mitra unggulan, kartu besar "Mitra Strategis" berisi kutipan, kartu lebih kecil "Mitra Pendukung", deretan penghargaan, dan ajakan "Ingin Menjadi Mitra BuyaLater?" ke `/kontak` |
 | `/kantor-cabang` | Daftar kantor (pusat/cabang) dengan alamat, telepon, jam operasional, dan peta OpenStreetMap yang berpindah saat kantor dipilih |
 | `/keamanan` | Cara BuyaLater menjaga data dan dana anggota |
-| `/syarat-ketentuan` | Syarat dan ketentuan layanan (draf) |
-| `/kebijakan-privasi` | Kebijakan privasi (draf) |
+| `/hak-anggota` | Hak anggota (informasi biaya jelas, penagihan beretika, pengaduan, perlindungan data, rapat anggota, SHU) dan kewajiban anggota (halaman 70) |
+| `/syarat-ketentuan` | Syarat dan ketentuan layanan, diperbarui Tahap 13 (khusus anggota, biaya, penagihan beretika, pengaduan) |
+| `/kebijakan-privasi` | Kebijakan privasi: data yang dikumpulkan dan tidak diambil, tiga persetujuan terpisah, hak mengunduh data dan menutup akun |
 
 Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur dan bayangan tipis saat di-scroll; tombol "Masuk Anggota" berikon gembok), carousel banner posisi `FOOTER`, band CTA melayang ("Mulai Rencanakan Keuangan Anda Hari Ini", tombol Daftar Sekarang/Hubungi Kami, mockup ponsel HTML/CSS), footer navy `#0B1438` dengan watermark logo ikon 3% dan data dari database (logo putih, deskripsi, media sosial aktif dalam lingkaran, menu kolom Layanan/Perusahaan/Bantuan yang menjadi accordion di HP, kolom Kantor Pusat dengan tautan ke semua kantor cabang, newsletter satu baris, metode pembayaran dalam pill, tautan legal, disclaimer proyek akademik), dan tombol WhatsApp melayang. Footer memakai nilai bawaan (`src/lib/kontak.ts`) bila data belum diisi.
 
@@ -207,7 +208,7 @@ Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur da
 | `/admin/pencapaian` | CRUD pencapaian untuk timeline `/tentang` |
 | `/admin/pesan` | Daftar pesan kontak |
 | `/admin/laporan` | Ringkasan keuangan dan cetak |
-| `/admin/pengaturan` | Bunga default, nominal simpanan, denda % per hari, hari pengingat sebelum jatuh tempo, batas hari terlambat kritis |
+| `/admin/pengaturan` | Bunga pinjaman/simpanan per tahun (batas 24%/9% divalidasi server), metode bunga, biaya admin (maks. 1%), denda 0,05%/hari, masa tenggang, batas denda 10% pokok, template pengingat, batas nominal, parameter kelayakan |
 
 ### Halaman pinjaman lanjutan (tahap 11B)
 
@@ -222,6 +223,20 @@ Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur da
 | `/admin/restrukturisasi` | Daftar dan keputusan restrukturisasi (hanya Manajer yang memutuskan) |
 | `/admin/shu`, `/anggota/shu` | Hitung (draft) dan bagikan SHU ke simpanan sukarela; riwayat SHU anggota |
 
+### Halaman koperasi close loop (tahap 13)
+
+| Route | Kebutuhan |
+| --- | --- |
+| `/admin/log-penagihan` | Halaman 67. Bukti setiap pengingat/penagihan (saluran, isi pesan, pengirim, waktu WIB) dengan filter saluran (Admin/Manajer) |
+| `/anggota/pengaduan` | Halaman 68. Buat tiket (kategori, isi, lampiran), pantau status dan tanggapan; tombol "Laporkan Penagihan Tidak Pantas" ada di detail pinjaman |
+| `/admin/pengaduan` | Halaman 69. Tanggapi tiket; target selesai 10 hari kerja, merah bila lewat (Admin/Manajer) |
+| `/hak-anggota` | Halaman 70 (publik), lihat tabel Publik |
+| `/admin/hari-libur` | Halaman tambahan. Kelola `HariLibur` (seed hari libur nasional 2026) yang menghentikan penagihan dan hitungan hari kerja (Admin) |
+| `/admin/dashboard` | Bertambah kartu **Kesehatan koperasi**: pinjaman beredar ÷ simpanan (kuning > 80%, merah > 90%, persetujuan pinjaman baru hanya Manajer bila > 90%) dan rasio pinjaman bermasalah (tunggakan > 90 hari) |
+| `/anggota/profil` | Bertambah kartu Data pribadi & privasi: riwayat persetujuan, unduh data (`/api/anggota/data-saya`), penutupan akun setelah semua pinjaman lunas |
+| `/register` | Tiga persetujuan data terpisah (identitas, kelayakan, pengingat), dicatat di `PersetujuanData` |
+| `/anggota/pinjaman/[id]/akad` | Ringkasan Biaya Pinjaman dalam satu kotak + centang "Saya sudah membaca dan memahami seluruh biaya di atas" sebelum tombol setuju aktif |
+
 ### Halaman keamanan (tahap 11A)
 
 | Route | Kebutuhan |
@@ -234,7 +249,7 @@ Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur da
 
 ### Route API
 
-`/api/register`, `/api/pesan`, `/api/subscribe` (newsletter), `/api/auth/[...nextauth]`, `/api/anggota/profil`, `/api/anggota/ktp`, `/api/file/[id]` (satu-satunya jalan ke berkas privat), `/api/anggota/pinjaman`, `/api/anggota/penarikan`.
+`/api/register`, `/api/pesan`, `/api/subscribe` (newsletter), `/api/auth/[...nextauth]`, `/api/anggota/profil`, `/api/anggota/ktp`, `/api/file/[id]` (satu-satunya jalan ke berkas privat), `/api/anggota/pinjaman`, `/api/anggota/penarikan`, `/api/anggota/data-saya`, `/api/akad/[pinjamanId]`.
 
 ## 8. Kebutuhan Fungsional
 
@@ -247,6 +262,7 @@ Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur da
 - Password minimal 8 karakter dengan huruf dan angka (Zod).
 - Kunci login 15 menit setelah 5 kali gagal (tabel `LoginAttempt`); login yang sukses atau reset password membuka kunci.
 - Lupa password: `/lupa-password` mengirim tautan token acak sekali pakai berlaku 1 jam (hash SHA-256 di tabel `PasswordResetToken`); jawaban selalu sama agar tidak bisa dipakai menebak akun.
+- **Login sosial (tahap 14)**: tombol "Masuk dengan Google" dan "Masuk dengan Apple" di `/login`, aktif hanya bila `AUTH_GOOGLE_ID/SECRET` atau `AUTH_APPLE_ID/SECRET` diisi di `.env`. Tombol Apple hanya tampil di perangkat iOS; tombol Google disembunyikan di WebView aplikasi Capacitor karena Google menolak OAuth di WebView. Login sosial hanya untuk anggota yang **sudah terdaftar**: email dari penyedia harus terverifikasi dan sama dengan email `User` (tidak ada akun otomatis karena pendaftaran wajib KTP/NIK); ADMIN/MANAJER/TELLER wajib password; anggota yang ditutup/dihapus atau terkunci tetap ditolak. Sesi tetap JWT 30 menit dan tidak ada tabel baru. Panduan: [docs/LOGIN-SOSIAL.md](LOGIN-SOSIAL.md).
 - Login tanpa session diarahkan ke `/login`.
 - Peran yang tidak berhak atas suatu halaman mendapat tampilan 404; ANGGOTA tidak dapat membuka `/admin/*` dan staf tidak dapat membuka `/anggota/*`.
 
@@ -362,7 +378,7 @@ Nilai keuangan menggunakan `Decimal` MySQL untuk menghindari kesalahan floating 
 - Status transaksi menggunakan Badge dengan warna semantik.
 - Form memakai komponen Input, Button, Card, dan Table reusable.
 - Setiap halaman memiliki state loading dan error yang jelas.
-- Layout harus responsif untuk desktop dan mobile.
+- Layout harus responsif untuk desktop dan mobile. Di layar < 640px ukuran dasar huruf 14px (skala `rem` lebih kecil), kolom isian 16px agar iOS tidak memperbesar halaman saat fokus, dan viewport `width=device-width, viewport-fit=cover`; kartu statistik dan kartu beranda dibuat ringkas (ikon di samping teks).
 
 ## 11. Kebutuhan Non-fungsional
 
@@ -377,7 +393,12 @@ Nilai keuangan menggunakan `Decimal` MySQL untuk menghindari kesalahan floating 
 - **Buku mutasi** (`Mutasi`, append-only): setiap transaksi uang membuat baris mutasi; saldo simpanan dihitung dari mutasi; koreksi dengan baris `KOREKSI`.
 - **Audit log** (`AuditLog`, append-only): perubahan Pinjaman, Pencairan, Pembayaran, Simpanan, Penarikan, RekeningAnggota, dan Pengaturan dicatat bersama user dan IP, dalam transaksi yang sama dengan perubahannya.
 - **Soft delete** (`deletedAt`) untuk Anggota, Galeri, Artikel, dan Mitra; anggota dengan pinjaman aktif atau saldo simpanan tidak dapat dinonaktifkan/dihapus.
-- **Kelayakan pinjaman (11B)**: `cekKelayakan()` — KYC `DITERIMA`, anggota ≥ 3 bulan, tanpa pinjaman aktif lain, plafon = min(3 × saldo simpanan, pinjaman maksimal), angsuran/bulan ≤ 30% penghasilan, tanpa tunggakan > 30 hari dalam 12 bulan; semua angka di `Pengaturan` dan diperiksa ulang di server saat pengajuan.
+- **Bunga dan biaya (13)**: bunga pinjaman per tahun (bawaan 12%, metode anuitas), bunga efektif termasuk biaya admin tidak boleh > 24%/tahun, bunga simpanan ≤ 9%, biaya admin ≤ 1% pokok, total denda ≤ 10% pokok; semua divalidasi di server dan ditolak dengan "Melebihi batas Permenkop UKM 8/2023". Bunga ke anggota selalu ditulis per tahun beserta bunga efektif; tidak pernah per hari.
+- **Penagihan beretika (13)**: pengingat/penagihan semua saluran hanya Senin–Sabtu 08.00–20.00 WIB di luar hari libur, hanya kepada anggota yang bersangkutan (tidak ada kontak darurat), maks. 1 per anggota per hari, template bebas kata terlarang, dan tercatat di `LogPenagihan`.
+- **Perlindungan endpoint & header (tahap 14)**: `src/lib/batas-laju.ts` membatasi per IP (jendela geser di memori; balasan 429): `/api/register` 5/jam, `/api/pesan` dan `/api/subscribe` 5/10 menit, lupa password 5/jam (selain batas 3/jam per akun). Semua halaman membawa header `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, CSP dasar (`frame-ancestors`, `base-uri`, `object-src`), dan HSTS di production. Batas laju per proses server; untuk banyak instance pindahkan ke Redis/database.
+- **Penguatan keamanan (14B)**: `next` 16.4.0 dan Capacitor 8.5.3 (menutup celah yang dilaporkan `npm audit`); pendaftaran menjawab sama untuk email/NIK baru maupun yang sudah ada (email pemberitahuan dikirim ke pemilik email lama) agar tidak bisa dipakai menebak anggota; semua nilai dinamis di email di-escape (`esc()` di `src/lib/email.ts`, dites); server production mencatat peringatan bila `AUTH_SECRET` lemah. `nodemailer` 10 dan `prisma` 8 ditunda karena versi mayor.
+- **Privasi (13)**: aplikasi mobile Capacitor hanya meminta INTERNET dan CAMERA (iOS: `NSCameraUsageDescription`); dijaga oleh tes `src/lib/izin-mobile.test.ts`.
+- **Kelayakan pinjaman (11B, diperluas 13)**: `cekKelayakan()` — anggota aktif & terverifikasi, simpanan pokok sudah dibayar, simpanan wajib tidak menunggak > 2 bulan (12 bulan penuh terakhir), KYC `DITERIMA`, anggota ≥ 3 bulan, tanpa pinjaman aktif lain, plafon = min(3 × saldo simpanan, pinjaman maksimal), angsuran/bulan ≤ 30% penghasilan, tanpa tunggakan > 30 hari dalam 12 bulan; semua angka di `Pengaturan` dan diperiksa ulang di server saat pengajuan.
 - **Akad digital**: pinjaman yang disetujui Manajer wajib disetujui anggota (checkbox + password) sebelum pencairan dapat diproses; salinan akad, IP, dan user-agent disimpan di `AkadPinjaman`.
 - **Rekening**: tambah/ubah/jadikan utama wajib password, nama pemilik harus sama dengan nama anggota (gelar diabaikan), memicu notifikasi + email, dan terkunci selama ada pinjaman `DISETUJUI` yang belum dicairkan.
 - **Pembayaran**: kode unik 3 digit per angsuran ditambahkan ke nominal transfer; hash SHA-256 bukti menolak file duplikat; kurang bayar → `SEBAGIAN` (denda dilunasi lebih dulu); kelebihan (termasuk kode unik) → simpanan sukarela.
@@ -390,12 +411,13 @@ Nilai keuangan menggunakan `Decimal` MySQL untuk menghindari kesalahan floating 
 
 `prisma/seed.ts` menyediakan:
 
-- 1 admin.
-- 15 anggota Indonesia.
-- Simpanan pokok, wajib beberapa bulan, dan sukarela.
-- 11 pinjaman dengan status bervariasi (termasuk 3 pinjaman `DICAIRKAN` dengan jadwal relatif terhadap hari ini).
+- 3 akun pengurus (Admin, Manajer, Teller) dan 15 anggota Indonesia (1 nonaktif).
+- Simpanan pokok Rp 100.000, simpanan wajib Rp 50.000 per bulan selama 12 bulan terakhir (4 anggota sengaja menunggak 1, 2, 4, dan 5 bulan), dan simpanan sukarela.
+- 11 pinjaman dengan status bervariasi: 2 `LUNAS`, 3 `DICAIRKAN`, 2 `DIAJUKAN`, 2 `DISETUJUI`, 2 `DITOLAK`. **Semua tanggal transaksi dihitung relatif terhadap hari ini** (pinjaman terlama dicairkan sekitar 8 bulan lalu, pengajuan terbaru 2 hari lalu) sehingga data selalu terasa baru setiap seed dijalankan ulang.
+- Bunga pinjaman 12% per tahun (anuitas) dan biaya admin 1%, sehingga bunga efektif sekitar 14–15% per tahun, di bawah batas 24% (Permenkop UKM 8/2023). Denda 0,05% per hari dengan masa tenggang 3 hari dan batas total 10% pokok.
+- 4 akun demo penagihan (id `demo-*`, dibuat `prisma/demo-tunggakan.ts`) dengan tunggakan 3, 12, dan 45 hari serta satu angsuran jatuh tempo 2 hari lagi, untuk mencoba pengingat (status terlambat muncul setelah admin menekan "Jalankan Pengecekan Sekarang" di `/admin/tunggakan`, atau saat pengecekan harian berjalan).
 - Rekening anggota (kecuali dua anggota yang sengaja tanpa rekening untuk demo gate pengajuan) dan 2 rekening koperasi.
-- Jadwal angsuran, termasuk demo tunggakan (terlambat sekitar 40, 9, dan 5 hari dengan denda terhitung) dan satu angsuran yang akan jatuh tempo dalam 2 hari.
+- Jadwal angsuran, termasuk demo tunggakan (terlambat sekitar 40 dan 5 hari dengan denda terhitung), satu pembayaran sebagian, satu bukti bayar menunggu verifikasi, dan satu angsuran yang jatuh tempo dalam 2 hari.
 - 4 notifikasi contoh.
 - 12 foto galeri dari Picsum dan 6 artikel berita.
 - 9 banner (3 HERO termasuk satu yang sudah berakhir, 4 FOOTER, 2 SIDEBAR).
@@ -429,6 +451,51 @@ Password akun anggota dibuat sama untuk kebutuhan demo lokal. Pada aplikasi nyat
 | ANGGOTA | Hendra Gunawan | `hendra.gunawan@buyalatter.com` | `anggota123` |
 | ANGGOTA | Tika Pratiwi | `tika.pratiwi@buyalatter.com` | `anggota123` |
 | ANGGOTA | Yusuf Maulana | `yusuf.maulana@buyalatter.com` | `anggota123` |
+
+### Panduan login dan alur uji untuk penguji
+
+Aplikasi memiliki **satu halaman login** (`/login`) untuk semua peran. Sistem yang menentukan tujuan setelah masuk berdasarkan peran akun.
+
+**Cara login sebagai anggota**
+1. Buka `http://localhost:3000` lalu klik **Masuk Anggota** (atau langsung ke `/login`).
+2. Isi kolom **Email** dengan `budi.santoso@buyalatter.com` dan **Password** dengan `anggota123`, lalu klik **Masuk**.
+3. Sistem mengarahkan ke **`/anggota/dashboard`** (portal anggota): saldo simpanan, pinjaman aktif, angsuran berikutnya, menu Ajukan Pinjaman, Pembayaran, Pengaduan, dan Profil.
+4. Untuk keluar, klik **Keluar** di sidebar atau menu.
+
+**Cara login sebagai admin/pengurus**
+1. Buka halaman yang sama, `/login`.
+2. Isi **Email** `admin@buyalatter.com` dan **Password** `admin123`, lalu klik **Masuk**.
+3. Sistem mengarahkan ke **`/admin/dashboard`** (panel pengurus). Menu yang tampil mengikuti peran: Admin mengelola anggota, konten, dan pengaturan; Manajer menyetujui pinjaman; Teller mencairkan dan memverifikasi pembayaran.
+4. Peran yang membuka halaman yang bukan haknya mendapat tampilan 404 (anggota tidak dapat membuka `/admin/*`, staf tidak dapat membuka `/anggota/*`).
+
+**Akun untuk dicoba (data dummy)**
+
+| Peran | Email (Username Login) | Password | Tujuan setelah login |
+| --- | --- | --- | --- |
+| Admin | `admin@buyalatter.com` | `admin123` | `/admin/dashboard` |
+| Manajer | `manajer@buyalatter.com` | `manajer123` | `/admin/dashboard` |
+| Teller | `teller@buyalatter.com` | `teller123` | `/admin/dashboard` |
+| Anggota | `budi.santoso@buyalatter.com` | `anggota123` | `/anggota/dashboard` |
+
+Semua anggota contoh lain memakai password yang sama, `anggota123`. Login Google/Apple bersifat opsional dan tidak aktif sebelum kredensialnya diisi di `.env`.
+
+**Catatan keamanan saat uji:** salah password 5 kali akan mengunci akun tersebut selama 15 menit (tunggu atau gunakan akun lain). Sesi berakhir otomatis setelah 30 menit tanpa aktivitas.
+
+**Skenario yang bisa dicoba per akun**
+
+| Akun (anggota) | Kondisi data | Yang dapat dicoba |
+| --- | --- | --- |
+| Budi Santoso | Pinjaman lunas, syarat terpenuhi | Ajukan pinjaman baru, lihat riwayat dan akad |
+| Siti Aminah | Angsuran ke-2 terlambat sekitar 40 hari | Lihat denda dan tunggakan; admin mengirim pengingat |
+| Agus Setiawan | Angsuran ke-7 dibayar sebagian | Verifikasi pembayaran sebagian |
+| Dedi Irawan | Bukti bayar menunggu verifikasi, angsuran ke-5 jatuh tempo 2 hari lagi | Teller memverifikasi pembayaran |
+| Andi Wijaya, Lina Marlina | Pengajuan pinjaman baru | Admin meninjau, Manajer menyetujui |
+| Rudi Hartono | Pinjaman Rp 12 juta disetujui, belum akad | Pencairan di atas batas wajib Manajer |
+| Nina Kurniawati | Pinjaman disetujui, sudah akad | Pencairan oleh Teller |
+| Rina Oktaviani | Simpanan wajib menunggak 4 bulan | Tidak lolos syarat kelayakan |
+| Hendra Gunawan | KYC menunggu, tanpa rekening | Verifikasi KYC dan gate rekening utama |
+
+Urutan demo yang disarankan: (1) login sebagai Budi dan lihat dashboard, simulasi, serta halaman Ajukan Pinjaman; (2) login sebagai Admin, buka Verifikasi KYC, Tunggakan, dan Log Penagihan; (3) login sebagai Manajer untuk persetujuan pinjaman; (4) login sebagai Teller untuk pencairan dan verifikasi pembayaran.
 
 ## 13. Kriteria Penerimaan
 
@@ -492,15 +559,16 @@ Password akun anggota dibuat sama untuk kebutuhan demo lokal. Pada aplikasi nyat
 | 10D | Rapikan tampilan situs publik: ritme latar putih/abu/navy, label kapital dikurangi, hierarki radius (10/16/28px), bayangan navy, navbar blur saat scroll, tombol gradien berkilau, animasi masuk hanya di hero, gambar artikel bertema keuangan/UMKM, dukungan prefers-reduced-motion | Selesai |
 | 11A | Keamanan dan keakuratan transaksi: Decimal, berkas privat, transaksi atomik, otorisasi 4 peran, validasi Zod, audit log, buku mutasi, kunci login, reset password, soft delete | Selesai |
 | 11B | KYC, aturan kelayakan, akad digital + PDF, keamanan rekening, kode unik + hash bukti + pembayaran sebagian/lebih, pelunasan dipercepat, batas denda, restrukturisasi, SHU | Selesai |
+| 12 | Dukungan Capacitor (Android/iOS) dengan mode kabel USB | Selesai |
+| 13 | Koperasi close loop: khusus anggota, bukan pinjol (copy, tagline, section "BuyaLater Bukan Pinjol", logo OJK sebagai acuan regulasi), bunga per tahun + metode + biaya admin + batas Permenkop UKM 8/2023, denda 0,05% dengan masa tenggang, Ringkasan Biaya sebelum akad, penagihan beretika (jadwal, hari libur, log, kata terlarang), persetujuan data, unduh data & penutupan akun, pengaduan, kesehatan koperasi, `/hak-anggota` | Selesai |
+| 14 | Login Google/Apple (anggota terdaftar saja), penyesuaian tampilan mobile (skala 14px, kartu ringkas, viewport), layar sambutan, batas laju + header keamanan, pembaruan paket, escape email, pendaftaran tidak membocorkan akun, data demo bertanggal relatif (baru), panduan login untuk penguji | Selesai |
 
 ## 16. Roadmap Lanjutan
 
 1. Halaman admin untuk melihat dan mengekspor `Subscriber`, serta mengirim newsletter.
 2. Halaman admin untuk `Keunggulan`, dan penempatan banner `FOOTER`/`SIDEBAR` yang lebih luas.
-3. Tambahkan audit log perubahan admin.
-4. Tambahkan export laporan CSV/PDF.
-5. Tambahkan validasi form dengan Zod.
-6. Tambahkan test otomatis untuk Server Actions, authorization, dan `cekJatuhTempo()`.
-7. Rate limiting untuk endpoint publik (`/api/subscribe`, `/api/pesan`, `/api/register`).
-8. Pindahkan penjadwalan ke worker/cron eksternal untuk deployment serverless.
-9. Peninjauan hukum untuk halaman syarat dan privasi, serta enkripsi data sensitif di level penyimpanan bila diperlukan.
+3. Tambahkan export laporan CSV/PDF.
+4. Login Google di dalam aplikasi mobile (butuh plugin native).
+5. Tambahkan test otomatis untuk Server Actions, authorization, dan `cekJatuhTempo()`.
+6. Pindahkan penjadwalan ke worker/cron eksternal untuk deployment serverless.
+7. Peninjauan hukum untuk halaman syarat dan privasi, serta enkripsi data sensitif di level penyimpanan bila diperlukan.

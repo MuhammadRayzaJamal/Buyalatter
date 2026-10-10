@@ -10,7 +10,11 @@ import { isAngsuranPayable, markPinjamanLunasIfComplete } from "@/lib/angsuran";
 import { catatAudit } from "@/lib/audit";
 import { buangBerkasPrivat, simpanBerkasPrivat, simpanGambarPublik } from "@/lib/berkas";
 import { cekJatuhTempo, kirimPengingatAngsuran } from "@/lib/cekJatuhTempo";
-import { hariTerlambat, hitungDenda } from "@/lib/denda";
+import { hariKenaDenda, hariTerlambat, hitungDenda, linkWhatsApp } from "@/lib/denda";
+import { hitungKesehatan, BATAS_KRITIS_PERSEN } from "@/lib/kesehatan";
+import { jadwalPinjaman } from "@/lib/bunga";
+import { catatLogPenagihan, pastikanBolehMengingatkan } from "@/lib/penagihan";
+import { cariKataTerlarang, isiTemplate } from "@/lib/penagihan-aturan";
 import { formatRupiah } from "@/lib/format";
 import { alokasiPembayaran, hitungPelunasan } from "@/lib/pelunasan";
 import { batasiDenda, sisaKuotaDenda } from "@/lib/denda-batas";
@@ -21,7 +25,7 @@ import { getBatas, getPengaturanTagihan } from "@/lib/pengaturan";
 import { Decimal, dec, jadwalAngsuran, kodeUnikAcak, NOL } from "@/lib/uang";
 import {
   diterimaSchema, shuSchema, anggotaBaruSchema, anggotaUbahSchema, galeriSchema, artikelSchema, rekeningKoperasiSchema, bannerSchema, testimoniSchema, mitraSchema, pencapaianSchema, penghargaanSchema, kantorSchema, menuFooterSchema, mediaSosialSchema, metodePembayaranSchema, ajukanPembayaranSchema as _unused, bayarTunaiSchema, buatSimpananSchema, dariForm, dendaSchema, koreksiSchema,
-  penggunaBaruSchema, pencairanSchema, pengaturanSchema, situsSchema, tolakSchema, ubahPeranSchema, verifikasiAnggotaSchema,
+  penggunaBaruSchema, hariLiburSchema, tanggapanSchema, pencairanSchema, pengaturanSchema, situsSchema, tolakSchema, ubahPeranSchema, verifikasiAnggotaSchema,
 } from "@/lib/validasi";
 import type { PosisiBanner } from "@prisma/client";
 
@@ -148,7 +152,7 @@ async function prosesPenarikan(id: string, status: "DISETUJUI" | "DITOLAK") {
     await tx.$queryRaw`SELECT id FROM Anggota WHERE id = ${lama.anggotaId} FOR UPDATE`;
     const hasil = await tx.penarikan.updateMany({ where: { id, status: "PENDING" }, data: { status } });
     if (hasil.count === 0) throw new GalatBisnis(SUDAH_DIPROSES);
-    if (status === "DISETUJUI") await catatMutasi(tx, { anggotaId: lama.anggotaId, jenis: "PENARIKAN", arah: "KELUAR", jumlah: lama.jumlah, referensiId: id, keterangan: "Penarikan simpanan sukarela" });
+    if (status === "DISETUJUI") await catatMutasi(tx, { anggotaId: lama.anggotaId, jenis: "PENARIKAN", arah: "KELUAR", jumlah: lama.jumlah, referensiId: id, keterangan: "Penarikan simpanan" });
     await catatAudit(tx, { userId: user.id, aksi: "UPDATE", entitas: "Penarikan", entitasId: id, dataLama: { status: "PENDING" }, dataBaru: { status } });
   });
   revalidatePath("/admin/penarikan"); revalidatePath("/admin/mutasi");
@@ -174,6 +178,10 @@ export async function catatKoreksi(formData: FormData) {
 // ---------- Pinjaman dan pencairan ----------
 async function putuskanPinjaman(id: string, status: "DISETUJUI" | "DITOLAK") {
   const user = await requireRole(...AKSES.pinjamanSetujui);
+  if (status === "DISETUJUI" && user.role !== "MANAJER") {
+    const kesehatan = await hitungKesehatan();
+    if (kesehatan.rasio !== null && kesehatan.rasio > BATAS_KRITIS_PERSEN) throw new GalatBisnis(`Pinjaman beredar sudah ${kesehatan.rasio}% dari total simpanan anggota (batas ${BATAS_KRITIS_PERSEN}%). Persetujuan pinjaman baru hanya dapat dilakukan oleh Manajer.`);
+  }
   const pinjaman = await prisma.$transaction(async (tx) => {
     const lama = await tx.pinjaman.findUnique({ where: { id } });
     if (!lama) throw new GalatBisnis("Pinjaman tidak ditemukan.");
@@ -210,6 +218,9 @@ export async function prosesPencairan(pinjamanId: string, formData: FormData) {
     if (!(await prisma.akadPinjaman.findUnique({ where: { pinjamanId }, select: { id: true } }))) throw new GalatBisnis("Pencairan belum dapat diproses: anggota belum menyetujui akad digital.");
     if (d.jumlahDicairkan.gt(awal.jumlah)) throw new GalatBisnis("Jumlah dicairkan tidak boleh melebihi jumlah pinjaman.");
     if (d.biayaAdmin.gte(d.jumlahDicairkan)) throw new GalatBisnis("Biaya admin tidak valid.");
+    // Biaya admin sudah ditetapkan dan ditampilkan ke anggota sebelum akad (maks. 1% pokok); tidak boleh diubah saat pencairan.
+    if (!d.biayaAdmin.eq(awal.biayaAdmin)) throw new GalatBisnis(`Biaya admin harus ${formatRupiah(awal.biayaAdmin)} sesuai ringkasan biaya yang disetujui anggota.`);
+    if (!d.jumlahDicairkan.eq(dec(awal.jumlah).minus(awal.biayaAdmin))) throw new GalatBisnis(`Jumlah dicairkan harus ${formatRupiah(dec(awal.jumlah).minus(awal.biayaAdmin))} (pokok dikurangi biaya admin).`);
     const rekening = await prisma.rekeningAnggota.findFirst({ where: { id: d.rekeningAnggotaId, anggotaId: awal.anggotaId } });
     if (!rekening) throw new GalatBisnis("Rekening tujuan bukan milik anggota ini.");
 
@@ -224,7 +235,7 @@ export async function prosesPencairan(pinjamanId: string, formData: FormData) {
         const hasil = await tx.pinjaman.updateMany({ where: { id: pinjamanId, status: "DISETUJUI" }, data: { status: "DICAIRKAN" } });
         if (hasil.count === 0) throw new GalatBisnis(SUDAH_DIPROSES);
         const pencairan = await tx.pencairan.create({ data: { pinjamanId, rekeningAnggotaId: d.rekeningAnggotaId, jumlahDicairkan: d.jumlahDicairkan, biayaAdmin: d.biayaAdmin, tanggalPencairan, buktiTransferUrl, diprosesOlehId: user.id, catatan: d.catatan } });
-        const jadwal = jadwalAngsuran(awal.totalBayar, awal.tenorBulan);
+        const jadwal = jadwalPinjaman(awal.jumlah, awal.bungaPersen, awal.tenorBulan, awal.metodeBunga);
         await tx.angsuran.createMany({
           data: jadwal.map((jumlah, index) => {
             const jatuhTempo = new Date(tanggalPencairan);
@@ -480,28 +491,109 @@ export async function updatePengaturan(formData: FormData) {
 
 const revalidateTagihan = () => { revalidatePath("/admin/tunggakan"); revalidatePath("/admin/pengingat"); revalidatePath("/admin/angsuran"); revalidatePath("/admin/dashboard"); };
 
-/** Tombol "Jalankan Pengecekan Sekarang" — logika sama dengan cron harian. */
+/** Tombol "Jalankan Pengecekan Sekarang" — logika sama dengan cron harian (termasuk jadwal penagihan dan batas 1 pengingat/hari). */
 export async function jalankanPengecekan(returnTo: string) {
   await requireRole(...AKSES.pengingat);
   const hasil = await cekJatuhTempo();
-  revalidateTagihan();
+  revalidateTagihan(); revalidatePath("/admin/log-penagihan");
   const tujuan = ["/admin/tunggakan", "/admin/pengingat"].includes(returnTo) ? returnTo : "/admin/tunggakan";
-  redirect(`${tujuan}?dicek=${hasil.pengingat}.${hasil.terlambat}.${hasil.email}.${hasil.dilewati}`);
+  redirect(`${tujuan}?dicek=${hasil.pengingat}.${hasil.terlambat}.${hasil.email}.${hasil.dilewati}${hasil.ditunda ? `&ditunda=${encodeURIComponent(hasil.ditunda)}` : ""}`);
 }
 
-/** Kirim pengingat manual (notifikasi + email) untuk satu angsuran; sengaja tidak terkena batas 1x/hari. */
-export async function kirimPengingatManual(angsuranId: string) {
-  await requireRole(...AKSES.pengingat);
+async function muatAngsuranTagih(angsuranId: string) {
   const angsuran = await prisma.angsuran.findUnique({ where: { id: angsuranId }, include: { pinjaman: { include: { anggota: { include: { user: true } } } } } });
-  if (!angsuran) throw new Error("Angsuran tidak ditemukan.");
-  if (angsuran.status === "LUNAS" || angsuran.status === "MENUNGGU_VERIFIKASI") throw new Error("Angsuran ini tidak perlu diingatkan.");
-  const { dendaPersenPerHari } = await getPengaturanTagihan();
+  if (!angsuran) throw new GalatBisnis("Angsuran tidak ditemukan.");
+  if (angsuran.status === "LUNAS" || angsuran.status === "MENUNGGU_VERIFIKASI") throw new GalatBisnis("Angsuran ini tidak perlu diingatkan.");
+  return angsuran;
+}
+
+async function perbaruiDendaSebelumTagih(angsuran: Awaited<ReturnType<typeof muatAngsuranTagih>>) {
+  const { dendaPersenPerHari, masaTenggang } = await getPengaturanTagihan();
   const hari = hariTerlambat(angsuran.tanggalJatuhTempo);
-  const denda = hari > 0 ? await batasiDenda(prisma, angsuran, hitungDenda(dec(angsuran.jumlah).minus(dec(angsuran.terbayar)), dendaPersenPerHari, hari)) : NOL;
-  if (hari > 0) await prisma.angsuran.update({ where: { id: angsuranId }, data: { status: "TERLAMBAT", denda } });
-  await kirimPengingatAngsuran(angsuran, hari, denda);
-  revalidateTagihan();
-  redirect("/admin/tunggakan?terkirim=1");
+  const denda = hari > 0 ? await batasiDenda(prisma, angsuran, hitungDenda(dec(angsuran.jumlah).minus(dec(angsuran.terbayar)), dendaPersenPerHari, hariKenaDenda(hari, masaTenggang))) : NOL;
+  if (hari > 0) await prisma.angsuran.update({ where: { id: angsuran.id }, data: { status: "TERLAMBAT", denda } });
+  return { hari, denda };
+}
+
+/** Kirim pengingat manual (notifikasi + email). Terkena aturan penagihan beretika: jadwal Senin–Sabtu 08.00–20.00 WIB dan maks. 1 pengingat/hari/anggota. */
+export async function kirimPengingatManual(angsuranId: string) {
+  const user = await requireRole(...AKSES.pengingat);
+  const hasil = await jalankan(async () => {
+    const angsuran = await muatAngsuranTagih(angsuranId);
+    await pastikanBolehMengingatkan(angsuran.pinjaman.anggotaId);
+    const { hari, denda } = await perbaruiDendaSebelumTagih(angsuran);
+    await kirimPengingatAngsuran(angsuran, hari, denda, user.id);
+    revalidateTagihan(); revalidatePath("/admin/log-penagihan");
+  });
+  redirect(hasil.ok ? "/admin/tunggakan?terkirim=1" : `/admin/tunggakan?galat=${encodeURIComponent(hasil.pesan)}`);
+}
+
+/**
+ * Tombol "Kirim Pengingat WhatsApp": aturan yang sama dengan pengingat lain, pesan dibuat dari template (bebas kata terlarang),
+ * dikirim hanya ke nomor HP anggota yang bersangkutan, dan dicatat di LogPenagihan sebelum admin diarahkan ke WhatsApp.
+ */
+export async function kirimPengingatWhatsApp(angsuranId: string) {
+  const user = await requireRole(...AKSES.pengingat);
+  let tujuan = "";
+  const hasil = await jalankan(async () => {
+    const angsuran = await muatAngsuranTagih(angsuranId);
+    const anggota = angsuran.pinjaman.anggota;
+    await pastikanBolehMengingatkan(anggota.id);
+    const { hari, denda } = await perbaruiDendaSebelumTagih(angsuran);
+    void hari;
+    const { templatePengingat } = await getPengaturanTagihan();
+    const data = { nama: anggota.user.nama, angsuranKe: angsuran.angsuranKe, jumlah: angsuran.jumlah, denda, jatuhTempo: angsuran.tanggalJatuhTempo };
+    const pesan = isiTemplate(templatePengingat, data);
+    const kata = cariKataTerlarang(pesan);
+    if (kata) throw new GalatBisnis(`Pesan memuat kata yang tidak diperbolehkan: "${kata}". Perbaiki template di Pengaturan.`);
+    await catatLogPenagihan(prisma, { anggotaId: anggota.id, angsuranId, saluran: "WHATSAPP", isiPesan: pesan, dikirimOlehId: user.id });
+    tujuan = linkWhatsApp(anggota.noHp, data, templatePengingat);
+    revalidateTagihan(); revalidatePath("/admin/log-penagihan");
+  });
+  redirect(hasil.ok ? tujuan : `/admin/tunggakan?galat=${encodeURIComponent(hasil.pesan)}`);
+}
+
+// ---------- Hari libur (Tahap 13) ----------
+export async function tambahHariLibur(formData: FormData) {
+  return jalankan(async () => {
+    const user = await requireRole(...AKSES.hariLibur);
+    const d = hariLiburSchema.parse(dariForm(formData));
+    const baru = await prisma.hariLibur.create({ data: { tanggal: new Date(`${d.tanggal}T00:00:00Z`), keterangan: d.keterangan } });
+    await catatAudit(prisma, { userId: user.id, aksi: "CREATE", entitas: "HariLibur", entitasId: baru.id, dataBaru: baru });
+    revalidatePath("/admin/hari-libur");
+    return "Hari libur ditambahkan.";
+  });
+}
+
+export async function hapusHariLibur(id: string) {
+  return jalankan(async () => {
+    const user = await requireRole(...AKSES.hariLibur);
+    const lama = await prisma.hariLibur.findUnique({ where: { id } });
+    if (!lama) throw new GalatBisnis("Hari libur tidak ditemukan.");
+    await prisma.hariLibur.delete({ where: { id } });
+    await catatAudit(prisma, { userId: user.id, aksi: "DELETE", entitas: "HariLibur", entitasId: id, dataLama: lama });
+    revalidatePath("/admin/hari-libur");
+    return "Hari libur dihapus.";
+  });
+}
+
+// ---------- Pengaduan anggota (Tahap 13) ----------
+export async function tanggapiPengaduan(id: string, formData: FormData) {
+  return jalankan(async () => {
+    const user = await requireRole(...AKSES.pengaduan);
+    const d = tanggapanSchema.parse(dariForm(formData));
+    const lama = await prisma.pengaduan.findUnique({ where: { id }, include: { anggota: true } });
+    if (!lama) throw new GalatBisnis("Pengaduan tidak ditemukan.");
+    if (lama.status === "SELESAI") throw new GalatBisnis("Pengaduan ini sudah selesai.");
+    const selesai = d.status === "SELESAI";
+    await prisma.$transaction(async (tx) => {
+      const hasil = await tx.pengaduan.updateMany({ where: { id, status: { not: "SELESAI" } }, data: { status: d.status, tanggapan: d.tanggapan, ditanganiOlehId: user.id, selesaiAt: selesai ? new Date() : null } });
+      if (hasil.count === 0) throw new GalatBisnis(SUDAH_DIPROSES);
+    });
+    await buatNotifikasi({ userId: lama.anggota.userId, tipe: "INFO", judul: `Pengaduan ${lama.nomorTiket} ${selesai ? "selesai" : "sedang diproses"}`, pesan: d.tanggapan, link: "/anggota/pengaduan" });
+    revalidatePath("/admin/pengaduan"); revalidatePath("/anggota/pengaduan");
+    return selesai ? "Pengaduan diselesaikan." : "Tanggapan disimpan.";
+  });
 }
 
 
@@ -645,10 +737,9 @@ const revalidateFooter = () => { revalidatePath("/admin/tampilan-footer"); reval
 export async function updateSitus(formData: FormData) {
   const user = await requireRole(...AKSES.pengaturan);
   const data = situsSchema.parse(dariForm(formData));
-  const batas = await getBatas();
   await prisma.$transaction(async (tx) => {
     const current = await tx.pengaturan.findFirst();
-    const saved = current ? await tx.pengaturan.update({ where: { id: current.id }, data }) : await tx.pengaturan.create({ data: { ...data, bungaDefault: batas.bungaDefault, simpananPokok: 100000, simpananWajib: 50000 } });
+    const saved = current ? await tx.pengaturan.update({ where: { id: current.id }, data }) : await tx.pengaturan.create({ data: { ...data, simpananPokok: 100000, simpananWajib: 50000 } });
     await catatAudit(tx, { userId: user.id, aksi: current ? "UPDATE" : "CREATE", entitas: "Pengaturan", entitasId: saved.id, dataLama: current ? { namaInstansi: current.namaInstansi, deskripsiFooter: current.deskripsiFooter, emailCs: current.emailCs, teleponCs: current.teleponCs, whatsappCs: current.whatsappCs, alamatPusat: current.alamatPusat } : undefined, dataBaru: data });
   });
   revalidateFooter();

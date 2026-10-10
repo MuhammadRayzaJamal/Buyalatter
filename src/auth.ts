@@ -1,5 +1,7 @@
 import NextAuth, { CredentialsSignin } from "next-auth";
+import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
 import bcrypt from "bcrypt";
 import { catatLogin, sisaMenitKunci } from "@/lib/login-aman";
 import { prisma } from "@/lib/prisma";
@@ -12,6 +14,18 @@ export class AkunTerkunci extends CredentialsSignin {
 
 /** Sesi berakhir bila tidak ada aktivitas 30 menit: token berumur 30 menit dan diperpanjang tiap kali sesi dipakai (maks. sekali per menit). */
 const SESI_DETIK = 30 * 60;
+
+// Peringatan keras bila server production berjalan dengan secret bawaan/pendek (token sesi bisa dipalsukan).
+if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+  const secret = process.env.AUTH_SECRET ?? "";
+  if (secret.length < 32 || /development|ganti-dengan|changeme/i.test(secret)) console.error("[KEAMANAN] AUTH_SECRET lemah atau masih bawaan. Buat yang baru: openssl rand -base64 32");
+}
+
+/** Login sosial hanya aktif bila kredensial OAuth-nya diisi di .env (lihat docs/LOGIN-SOSIAL.md). */
+export const loginSosialAktif = {
+  google: Boolean(process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET),
+  apple: Boolean(process.env.AUTH_APPLE_ID && process.env.AUTH_APPLE_SECRET),
+};
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt", maxAge: SESI_DETIK, updateAge: 60 },
@@ -31,8 +45,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
       const user = await prisma.user.findUnique({ where: { email }, include: { anggota: true } });
       const cocok = user ? await bcrypt.compare(password, user.password) : false;
-      // Anggota yang sudah di-soft-delete tidak boleh masuk lagi.
-      const aktif = user && !(user.role === "ANGGOTA" && (!user.anggota || user.anggota.deletedAt));
+      // Anggota yang di-soft-delete atau sudah menutup akunnya tidak boleh masuk lagi.
+      const aktif = user && !(user.role === "ANGGOTA" && (!user.anggota || user.anggota.deletedAt || user.anggota.ditutupPada));
       if (!user || !cocok || !aktif) {
         await catatLogin(email, false, ip);
         if ((await sisaMenitKunci(email)) > 0) throw new AkunTerkunci();
@@ -41,9 +55,32 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       await catatLogin(email, true, ip);
       return { id: user.id, name: user.nama, email: user.email, role: user.role, anggotaId: user.anggota?.id };
     },
-  })],
+  }), ...(loginSosialAktif.google ? [Google] : []), ...(loginSosialAktif.apple ? [Apple] : [])],
   callbacks: {
-    jwt({ token, user }) {
+    /** Login Google/Apple hanya untuk anggota yang SUDAH terdaftar (email terverifikasi sama dengan akun). Pendaftaran tetap lewat form (butuh KTP/NIK); staf wajib memakai password. */
+    async signIn({ account, profile }) {
+      if (!account || account.provider === "credentials") return true;
+      const email = profile?.email?.toLowerCase();
+      const terverifikasi = profile?.email_verified === true || (profile?.email_verified as unknown) === "true";
+      if (!email || !terverifikasi) return "/login?error=sosial-email";
+      const user = await prisma.user.findUnique({ where: { email }, include: { anggota: true } });
+      if (!user || user.role !== "ANGGOTA") return "/login?error=sosial-belum";
+      if (!user.anggota || user.anggota.deletedAt || user.anggota.ditutupPada) return "/login?error=sosial-belum";
+      if ((await sisaMenitKunci(email)) > 0) return "/login?error=sosial-kunci";
+      await catatLogin(email, true, null);
+      return true;
+    },
+    async jwt({ token, user, account }) {
+      if (account && account.provider !== "credentials" && token.email) {
+        const db = await prisma.user.findUnique({ where: { email: token.email.toLowerCase() }, include: { anggota: true } });
+        if (db) {
+          token.id = db.id;
+          token.name = db.nama;
+          token.role = db.role;
+          token.anggotaId = db.anggota?.id;
+        }
+        return token;
+      }
       if (user) {
         token.id = user.id as string;
         token.role = user.role;

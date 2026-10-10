@@ -8,6 +8,9 @@ import { hariTerlambat } from "@/lib/denda";
 import { formatRupiah, formatTanggal } from "@/lib/format";
 import { getBatas } from "@/lib/pengaturan";
 import { hitungPelunasan } from "@/lib/pelunasan";
+import { hitungPinjaman, LABEL_METODE } from "@/lib/bunga";
+import { laporkanPenagihan } from "../../actions";
+import { AksiForm, TombolKirim } from "@/components/ui/aksi-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +33,7 @@ export default async function DetailPinjamanPage({ params }: { params: Promise<{
   const firstPayableKe = pinjaman.angsuran.find((item) => item.status === "BELUM" || item.status === "TERLAMBAT")?.angsuranKe;
   const berjalan = pinjaman.status === "DICAIRKAN";
   const pelunasan = berjalan ? hitungPelunasan(pinjaman, pinjaman.angsuran) : null;
+  const biaya = hitungPinjaman({ pokok: pinjaman.jumlah, bungaTahun: pinjaman.bungaPersen, tenorBulan: pinjaman.tenorBulan, metode: pinjaman.metodeBunga, biayaAdmin: pinjaman.biayaAdmin });
   const adaMenunggu = pinjaman.angsuran.some((a) => a.status === "MENUNGGU_VERIFIKASI");
   const tunggakan = pinjaman.angsuran.filter((a) => a.status !== "LUNAS").reduce((maks, a) => Math.max(maks, hariTerlambat(a.tanggalJatuhTempo)), 0);
   const bolehRestruktur = berjalan && tunggakan > batas.maksHariTunggakan && !pinjaman.restrukturisasi.some((r) => r.status === "DIAJUKAN");
@@ -41,7 +45,7 @@ export default async function DetailPinjamanPage({ params }: { params: Promise<{
 
     {perluAkad && <Card className="border-sky-200 bg-sky-50"><CardContent className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-bold text-slate-900">Pinjaman disetujui — setujui akad digital</p><p className="mt-1 text-sm text-slate-600">Dana baru dapat dicairkan setelah Anda membaca dan menyetujui akad.</p></div><Button href={`/anggota/pinjaman/${id}/akad`}>Baca &amp; setujui akad</Button></CardContent></Card>}
 
-    <div className="grid gap-5 sm:grid-cols-3"><Card className="p-5"><p className="text-xs text-slate-500">Total bayar</p><p className="mt-2 text-xl font-bold text-slate-900">{formatRupiah(pinjaman.totalBayar)}</p></Card><Card className="p-5"><p className="text-xs text-slate-500">Tenor</p><p className="mt-2 text-xl font-bold text-slate-900">{pinjaman.tenorBulan} bulan</p></Card><Card className="p-5"><p className="text-xs text-slate-500">Bunga</p><p className="mt-2 text-xl font-bold text-slate-900">{pinjaman.bungaPersen.toString()}% / bulan</p></Card></div>
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4"><Card className="p-5"><p className="text-xs text-slate-500">Total yang harus dibayar</p><p className="mt-2 text-xl font-bold text-slate-900">{formatRupiah(pinjaman.totalBayar)}</p></Card><Card className="p-5"><p className="text-xs text-slate-500">Tenor</p><p className="mt-2 text-xl font-bold text-slate-900">{pinjaman.tenorBulan} bulan</p></Card><Card className="p-5"><p className="text-xs text-slate-500">Bunga per tahun</p><p className="mt-2 text-xl font-bold text-slate-900">{pinjaman.bungaPersen.toString()}%</p><p className="mt-1 text-xs text-slate-500">{LABEL_METODE[pinjaman.metodeBunga].split(" (")[0]}</p></Card><Card className="p-5"><p className="text-xs text-slate-500">Bunga efektif per tahun</p><p className="mt-2 text-xl font-bold text-slate-900">{biaya.bungaEfektifTahun.toString()}%</p><p className="mt-1 text-xs text-slate-500">termasuk biaya admin {formatRupiah(pinjaman.biayaAdmin)}</p></Card></div>
 
     {(pinjaman.akad || pelunasan || bolehRestruktur) && <div className="flex flex-wrap gap-3">
       {pinjaman.akad && <Button href={`/api/akad/${id}`} variant="outline">Unduh akad (PDF)</Button>}
@@ -56,5 +60,16 @@ export default async function DetailPinjamanPage({ params }: { params: Promise<{
     )}</div>}</CardContent></Card>}
 
     <Card><CardHeader><CardTitle>Jadwal angsuran</CardTitle></CardHeader><CardContent className="p-0">{pinjaman.angsuran.length ? <div className="divide-y divide-slate-100">{pinjaman.angsuran.map((item) => <div className="flex items-center justify-between px-5 py-4" key={item.id}><div><p className="font-semibold text-slate-800">Angsuran ke-{item.angsuranKe}</p><p className="mt-1 text-xs text-slate-500">Jatuh tempo {formatTanggal(item.tanggalJatuhTempo)}{item.denda.gt(0) && <span className="text-red-600"> · denda {formatRupiah(item.denda)}</span>}{item.terbayar.gt(0) && item.status !== "LUNAS" && <span className="text-emerald-700"> · terbayar {formatRupiah(item.terbayar)}</span>}</p></div><div className="flex items-center gap-3"><div className="text-right"><p className="font-bold text-slate-800">{formatRupiah(item.jumlah.plus(item.denda).minus(item.status === "LUNAS" ? 0 : item.terbayar))}</p><Badge variant={angsuranStatusVariant[item.status]}>{angsuranStatusLabel[item.status]}</Badge></div>{item.angsuranKe === firstPayableKe && <Button href={`/anggota/bayar/${item.id}`} size="sm">Bayar</Button>}</div></div>)}</div> : <p className="px-5 py-10 text-center text-sm text-slate-500">Jadwal angsuran akan dibuat setelah pinjaman dicairkan.</p>}</CardContent></Card>
+
+    {(berjalan || pinjaman.status === "LUNAS") && <Card><CardHeader><CardTitle>Penagihan tidak pantas?</CardTitle></CardHeader><CardContent className="space-y-3 text-sm text-slate-600">
+      <p>Penagihan hanya boleh dilakukan kepada Anda, Senin–Sabtu pukul 08.00–20.00 WIB di luar hari libur, maksimal satu pengingat per hari, dengan bahasa yang sopan. Bila Anda mengalami yang berbeda, laporkan di sini; laporan menjadi pengaduan kategori Penagihan.</p>
+      <details className="rounded-xl border border-slate-200 p-4"><summary className="cursor-pointer text-sm font-bold text-red-700">Laporkan Penagihan Tidak Pantas</summary>
+        <AksiForm aksi={laporkanPenagihan.bind(null, id)} className="mt-4 space-y-3" resetSetelahSukses>
+          <label className="block space-y-1.5" htmlFor="isiLaporan"><span className="block text-sm font-semibold text-slate-700">Ceritakan kejadiannya (waktu, saluran, isi pesan)</span><textarea className="min-h-28 w-full rounded-lg border border-slate-200 px-3.5 py-3 text-sm outline-none focus:border-navy focus:ring-4 focus:ring-blue-100" id="isiLaporan" maxLength={2000} minLength={10} name="isi" required /></label>
+          <label className="block space-y-1.5" htmlFor="lampiranLaporan"><span className="block text-sm font-semibold text-slate-700">Lampiran (tangkapan layar, opsional · JPG/PNG/PDF maks 2MB)</span><input accept="image/jpeg,image/png,application/pdf" className="block text-sm" id="lampiranLaporan" name="lampiran" type="file" /></label>
+          <TombolKirim>Kirim laporan</TombolKirim>
+        </AksiForm>
+      </details>
+    </CardContent></Card>}
   </div>;
 }

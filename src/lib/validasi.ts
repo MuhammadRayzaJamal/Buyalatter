@@ -2,6 +2,8 @@ import { z } from "zod";
 import { Decimal } from "@/lib/uang";
 import type { BatasNominal } from "@/lib/pengaturan";
 import { formatRupiah } from "@/lib/format";
+import { BATAS_BIAYA_ADMIN_PERSEN, BATAS_BUNGA_PINJAMAN_TAHUN, BATAS_BUNGA_SIMPANAN_TAHUN, BATAS_DENDA_PERSEN_POKOK, bungaEfektifTertinggi, PESAN_MELEBIHI_BATAS } from "@/lib/bunga";
+import { cariKataTerlarang } from "@/lib/penagihan-aturan";
 
 // ---------- Primitif ----------
 export const teks = (label: string, maks = 191, min = 1) =>
@@ -84,6 +86,13 @@ export const registerSchema = z.object({
   password: passwordSchema,
   tanggalMasuk: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal bergabung tidak valid.").refine((v) => !Number.isNaN(Date.parse(v)), "Tanggal bergabung tidak valid."),
 });
+const persetujuan = (pesan: string) => z.string({ error: pesan }).refine((v) => v === "on", pesan);
+/** Pendaftaran publik: tiga persetujuan penggunaan data pribadi (UU PDP) wajib dicentang terpisah. */
+export const registerPublikSchema = registerSchema.extend({
+  persetujuanIdentitas: persetujuan("Setujui penggunaan data untuk verifikasi identitas."),
+  persetujuanKelayakan: persetujuan("Setujui penggunaan data untuk penilaian kelayakan pinjaman."),
+  persetujuanPengingat: persetujuan("Setujui penggunaan data untuk pengiriman pengingat."),
+});
 export const anggotaBaruSchema = registerSchema;
 export const anggotaUbahSchema = z.object({
   nama: teks("Nama", 100, 3),
@@ -151,12 +160,18 @@ export const koreksiSchema = z.object({
 });
 
 // ---------- Pengaturan ----------
+const metodeBunga = z.enum(["FLAT", "MENURUN", "ANUITAS"], { error: "Metode bunga tidak valid." });
 export const pengaturanSchema = z
   .object({
-    bungaDefault: persen("Bunga default"),
+    bungaPinjamanPerTahun: persen("Bunga pinjaman per tahun"),
+    bungaSimpananPerTahun: persen("Bunga simpanan per tahun"),
+    metodeBunga,
+    biayaAdminPersen: persen("Biaya administrasi"),
     simpananPokok: uangNolBoleh("Simpanan pokok"),
     simpananWajib: uangNolBoleh("Simpanan wajib"),
     dendaPersenPerHari: persen("Denda per hari"),
+    masaTenggangHari: bilanganBulat("Masa tenggang", 0, 30),
+    templatePengingat: z.string().trim().max(1000, "Template maksimal 1000 karakter.").optional().transform((v) => v || null),
     hariPengingatSebelumJatuhTempo: bilanganBulat("Hari pengingat", 0, 60),
     batasHariTerlambatKritis: bilanganBulat("Batas hari kritis", 1, 3650),
     batasPencairanManajer: uangSchema("Batas pencairan wajib manajer"),
@@ -172,7 +187,34 @@ export const pengaturanSchema = z
     batasDendaPersen: persen("Batas denda"),
   })
   .refine((v) => v.minPinjaman.lte(v.maksPinjaman), { message: "Pinjaman minimal tidak boleh melebihi maksimal.", path: ["minPinjaman"] })
-  .refine((v) => v.minTransaksi.lte(v.maksTransaksi), { message: "Transaksi minimal tidak boleh melebihi maksimal.", path: ["minTransaksi"] });
+  .refine((v) => v.minTransaksi.lte(v.maksTransaksi), { message: "Transaksi minimal tidak boleh melebihi maksimal.", path: ["minTransaksi"] })
+  // Batas regulasi (Permenkop UKM 8/2023): divalidasi di server dan tidak dapat dilampaui admin.
+  .refine((v) => v.bungaSimpananPerTahun.lte(BATAS_BUNGA_SIMPANAN_TAHUN), { message: `${PESAN_MELEBIHI_BATAS}: bunga simpanan maksimal ${BATAS_BUNGA_SIMPANAN_TAHUN}% per tahun.`, path: ["bungaSimpananPerTahun"] })
+  .refine((v) => v.bungaPinjamanPerTahun.lte(BATAS_BUNGA_PINJAMAN_TAHUN), { message: `${PESAN_MELEBIHI_BATAS}: bunga pinjaman maksimal ${BATAS_BUNGA_PINJAMAN_TAHUN}% per tahun.`, path: ["bungaPinjamanPerTahun"] })
+  .refine((v) => v.biayaAdminPersen.lte(BATAS_BIAYA_ADMIN_PERSEN), { message: `${PESAN_MELEBIHI_BATAS}: biaya administrasi maksimal ${BATAS_BIAYA_ADMIN_PERSEN}% dari pokok.`, path: ["biayaAdminPersen"] })
+  .refine((v) => v.batasDendaPersen.lte(BATAS_DENDA_PERSEN_POKOK), { message: `Total denda maksimal ${BATAS_DENDA_PERSEN_POKOK}% dari pokok pinjaman.`, path: ["batasDendaPersen"] })
+  .refine((v) => { const kata = v.templatePengingat ? cariKataTerlarang(v.templatePengingat) : null; return !kata; }, { message: "Template pengingat memuat kata yang tidak diperbolehkan (ancaman, mempermalukan, dsb.). Gunakan bahasa yang sopan dan informatif.", path: ["templatePengingat"] })
+  .superRefine((v, ctx) => {
+    // Bunga efektif (termasuk biaya admin) pada tenor mana pun tidak boleh melewati 24% per tahun.
+    if (v.bungaPinjamanPerTahun.gt(BATAS_BUNGA_PINJAMAN_TAHUN) || v.biayaAdminPersen.gt(BATAS_BIAYA_ADMIN_PERSEN)) return;
+    const efektif = bungaEfektifTertinggi(v.bungaPinjamanPerTahun, v.metodeBunga, v.biayaAdminPersen);
+    if (efektif.gt(BATAS_BUNGA_PINJAMAN_TAHUN)) ctx.addIssue({ code: "custom", path: ["bungaPinjamanPerTahun"], message: `${PESAN_MELEBIHI_BATAS}: bunga efektif pinjaman ${efektif.toString()}% per tahun melebihi ${BATAS_BUNGA_PINJAMAN_TAHUN}% (metode ${v.metodeBunga}, termasuk biaya admin). Turunkan bunga atau pilih metode menurun/anuitas.` });
+  });
+
+export const hariLiburSchema = z.object({
+  tanggal: z.string({ error: "Tanggal wajib diisi." }).regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid.").refine((v) => !Number.isNaN(Date.parse(v)), "Tanggal tidak valid."),
+  keterangan: teks("Keterangan", 120, 3),
+});
+
+// ---------- Pengaduan ----------
+export const pengaduanSchema = z.object({
+  kategori: z.enum(["PINJAMAN", "PENAGIHAN", "SIMPANAN", "LAYANAN", "DATA"], { error: "Pilih kategori pengaduan." }),
+  isi: teks("Isi pengaduan", 2000, 10),
+});
+export const tanggapanSchema = z.object({
+  status: z.enum(["DIPROSES", "SELESAI"], { error: "Status tidak valid." }),
+  tanggapan: teks("Tanggapan", 2000, 5),
+});
 
 // ---------- Konten ----------
 export const situsSchema = z.object({
@@ -231,6 +273,7 @@ export const pesanKontakSchema = z.object({ nama: teks("Nama", 100), email: emai
 // ---------- Tahap 11B ----------
 export const kycSchema = z.object({ penghasilanBulanan: uangSchema("Penghasilan bulanan"), pekerjaan: teks("Pekerjaan", 100, 2) });
 export const akadSchema = z.object({
+  pahamBiaya: z.string({ error: "Centang pernyataan bahwa Anda sudah membaca dan memahami seluruh biaya." }).refine((v) => v === "on", "Centang pernyataan bahwa Anda sudah membaca dan memahami seluruh biaya."),
   setuju: z.string({ error: "Centang pernyataan persetujuan akad." }).refine((v) => v === "on", "Centang pernyataan persetujuan akad."),
   password: z.string({ error: "Masukkan password Anda." }).min(1, "Masukkan password Anda."),
 });

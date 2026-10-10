@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import type { Tx } from "@/lib/prisma";
 import { prisma } from "@/lib/prisma";
 
-export type EntitasAudit = "Pinjaman" | "Pencairan" | "Pembayaran" | "Simpanan" | "Penarikan" | "RekeningAnggota" | "Pengaturan" | "Angsuran" | "Anggota" | "User" | "Mutasi" | "VerifikasiAnggota" | "AkadPinjaman" | "Restrukturisasi" | "PeriodeShu";
+export type EntitasAudit = "Pinjaman" | "Pencairan" | "Pembayaran" | "Simpanan" | "Penarikan" | "RekeningAnggota" | "Pengaturan" | "Angsuran" | "Anggota" | "User" | "Mutasi" | "VerifikasiAnggota" | "AkadPinjaman" | "Restrukturisasi" | "PeriodeShu" | "HariLibur" | "Pengaduan" | "PersetujuanData";
 
 /** Alamat IP klien dari header proxy; null bila dipanggil di luar konteks permintaan (seed, cron). */
 export async function ambilIp() {

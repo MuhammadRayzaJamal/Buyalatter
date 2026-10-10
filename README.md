@@ -208,6 +208,17 @@ npm test
 
 Mutasi admin menggunakan Server Actions dan selalu memeriksa peran melalui `requireRole(...)` (`src/lib/otorisasi.ts`); area anggota memakai `requireAnggota()` dan semua query difilter `anggotaId`. Proteksi route Next.js 16 berada pada `src/proxy.ts`, pengganti resmi `middleware.ts`.This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+### Koperasi close loop (Tahap 13)
+
+- **Migrasi**: `mysql -u root buyalatter_db < prisma/sql/13-koperasi-close-loop.sql`, lalu `npx prisma generate` dan **restart `npm run dev`** (Prisma client berubah). Bunga pinjaman lama dikonversi dari per bulan ke per tahun (×12); kolom `Pengaturan.bungaDefault` dihapus.
+- **Bunga** (`/admin/pengaturan`): bunga pinjaman per tahun (bawaan 12%), metode FLAT/MENURUN/ANUITAS (bawaan anuitas), biaya admin maks. 1%, bunga simpanan maks. 9%. Server menolak bunga efektif > 24%/tahun dengan pesan "Melebihi batas Permenkop UKM 8/2023". Rumus ada di `src/lib/bunga.ts` (dipakai pengajuan, akad, simulasi publik, dan seed).
+- **Denda**: 0,05% per hari dari angsuran terlambat, masa tenggang 3 hari, total maks. 10% pokok.
+- **Penagihan beretika**: jadwal Senin–Sabtu 08.00–20.00 WIB di luar hari libur (`/admin/hari-libur`), maks. 1 pengingat/anggota/hari, tombol WhatsApp dinonaktifkan di luar jadwal, bukti di `/admin/log-penagihan`. Template pesan ada di Pengaturan dan ditolak bila memuat kata terlarang (`src/lib/penagihan-aturan.ts`).
+- **Pengaduan**: `/anggota/pengaduan` dan `/admin/pengaduan` (target 10 hari kerja). **Hak anggota**: `/hak-anggota`.
+- **Seed**: hari libur nasional 2026 (periksa ulang terhadap SKB 3 Menteri), persetujuan data semua anggota, 4 pengaduan contoh, 4 log penagihan, simpanan wajib 12 bulan terakhir (anggota 5/9/12/14 sengaja menunggak), dan 4 akun demo tunggakan (rizmi, rayza, lail, fatih @buyalatter.com) yang kini ikut dibuat oleh `npm run seed`.
+- **Mobile**: aplikasi Capacitor hanya meminta izin INTERNET dan CAMERA (`src/lib/izin-mobile.test.ts` menjaganya).
+- Logo OJK ([public/images/logo-ojk.jpg](public/images/logo-ojk.jpg)) dipakai sebagai **acuan regulasi**, bukan klaim kerja sama/pengawasan resmi.
+
 ## Getting Started
 
 First, run the development server:
@@ -242,3 +253,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Login Google / Apple (Tahap 14)
+
+Tombol muncul di `/login` bila `AUTH_GOOGLE_ID/SECRET` atau `AUTH_APPLE_ID/SECRET` diisi di `.env`. Hanya untuk anggota yang sudah terdaftar (email sama); Apple hanya tampil di perangkat iOS. Panduan lengkap: [docs/LOGIN-SOSIAL.md](docs/LOGIN-SOSIAL.md).
+
+## Sebelum deploy (keamanan)
+
+1. Buat `AUTH_SECRET` baru yang acak: `openssl rand -base64 32` (jangan pakai secret development). Server production mencatat peringatan jika secret lemah.
+2. Jangan jalankan seed di database production dan ganti password akun admin bawaan.
+3. Pasang HTTPS (header HSTS aktif otomatis di production) dan pastikan hanya proxy tepercaya yang mengisi `x-forwarded-for`, karena IP dipakai untuk audit, akad, dan batas laju.
+4. Batas laju tersimpan di memori satu proses; untuk banyak instance pindahkan ke Redis/database.
+5. Cadangkan database dan folder `storage/private` secara berkala.

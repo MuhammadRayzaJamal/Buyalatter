@@ -12,6 +12,8 @@ const config = {
   appName: "BuyaLater",
   webDir: "cap-shell",
   server: { url, cleartext: true, errorPath: "index.html" },
+  // Konten web dimulai di bawah status bar/notch iOS agar navbar tidak tertimpa.
+  ios: { contentInset: "always" },
 };
 
 export default config;

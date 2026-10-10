@@ -5,7 +5,7 @@ import { KONTAK } from "@/lib/kontak";
 export const KOLOM_LABEL: Record<KolomFooter, string> = { LAYANAN: "Layanan", PERUSAHAAN: "Perusahaan", BANTUAN: "Bantuan" };
 export const PLATFORM_LABEL: Record<PlatformSosial, string> = { INSTAGRAM: "Instagram", FACEBOOK: "Facebook", YOUTUBE: "YouTube", TIKTOK: "TikTok", WHATSAPP: "WhatsApp" };
 
-const DESKRIPSI_DEFAULT = "BuyaLater adalah layanan simpan pinjam online yang membantu anggota menabung dan meminjam dengan mudah, aman, dan transparan.";
+const DESKRIPSI_DEFAULT = "BuyaLater adalah koperasi simpan pinjam digital yang hanya melayani anggota: menabung bersama, meminjam dengan biaya yang jelas, dan keuntungan kembali ke anggota lewat SHU.";
 
 /** Identitas, kontak, dan isi footer dari database; jatuh ke nilai bawaan (src/lib/kontak.ts) bila belum diisi admin. */
 export async function getSitus() {

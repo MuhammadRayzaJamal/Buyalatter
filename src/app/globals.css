@@ -54,6 +54,22 @@
   }
 }
 
+/* HP: skala seluruh UI (rem) sedikit lebih kecil agar tidak terasa ter-zoom.
+   Input tetap 16px supaya iOS tidak memperbesar halaman saat fokus. */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+@media (max-width: 639px) {
+  html {
+    font-size: 14px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
@@ -86,6 +102,18 @@ h4 {
   from { opacity: 0; transform: translateY(16px); }
   to { opacity: 1; transform: none; }
 }
+
+/* Layar sambutan (SplashAwal) */
+@keyframes splash-logo { from { opacity: 0; transform: scale(0.6) rotate(-8deg); } to { opacity: 1; transform: none; } }
+@keyframes splash-teks { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes splash-cincin { from { opacity: 0.8; transform: scale(1); } to { opacity: 0; transform: scale(1.9); } }
+@keyframes splash-bar { from { width: 0; } to { width: 100%; } }
+@keyframes splash-aksen { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-24px); } }
+.splash-logo { animation: splash-logo 0.7s cubic-bezier(0.2, 0.9, 0.3, 1.2) both; }
+.splash-teks { animation: splash-teks 0.6s ease-out 0.35s both; }
+.splash-cincin { animation: splash-cincin 1.6s ease-out 0.5s infinite; }
+.splash-bar { animation-name: splash-bar; animation-timing-function: ease-in-out; animation-fill-mode: both; }
+.splash-aksen { animation: splash-aksen 4s ease-in-out infinite; }
 
 /* Hormati preferensi pengguna: matikan animasi dan transisi. Marquee punya baris statis sendiri. */
 @media (prefers-reduced-motion: reduce) {

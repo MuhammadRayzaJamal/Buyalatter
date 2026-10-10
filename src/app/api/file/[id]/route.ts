@@ -10,6 +10,7 @@ const STAF_PER_KATEGORI: Record<string, Peran[]> = {
   SWAFOTO: ["ADMIN", "MANAJER"],
   BUKTI_TRANSFER: ["ADMIN", "MANAJER", "TELLER"],
   BUKTI_BAYAR: ["ADMIN", "MANAJER", "TELLER"],
+  PENGADUAN: ["ADMIN", "MANAJER"],
 };
 
 const tidakDitemukan = () => NextResponse.json({ message: "Berkas tidak ditemukan." }, { status: 404 });
