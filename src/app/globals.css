@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Mode gelap berbasis kelas: utilitas dark: aktif di dalam elemen berkelas .dark (panel admin dan portal anggota). */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #f7f9fc;
   --foreground: #172033;
@@ -124,3 +127,115 @@ h4 {
     scroll-behavior: auto !important;
   }
 }
+
+
+/* ===== Tema dashboard (admin & anggota) =====
+   Palet gelap memetakan ulang skala warna Tailwind di dalam .dark, sehingga seluruh komponen
+   (kartu, tabel, input, badge) ikut berubah tanpa mengubah kelasnya satu per satu. */
+:root {
+  --g-teks: #64748b;
+  --g-garis: #e3e8f1;
+  --g-biru: #1e5fc7;
+  --g-langit: #38bdf8;
+  --g-hijau: #059669;
+  --g-emas: #b8892b;
+  --g-merah: #dc2626;
+  --g-ungu: #7c3aed;
+  --g-kartu: #ffffff;
+}
+
+.tema-latar {
+  background:
+    radial-gradient(900px 420px at 85% -8%, rgba(30, 95, 199, 0.07), transparent 60%),
+    #f7f9fc;
+}
+
+.dark {
+  color-scheme: dark;
+  --line: #1d2a52;
+  --shadow-kartu: 0 18px 40px -18px rgba(0, 0, 0, 0.75);
+  --g-teks: #8f9cc2;
+  --g-garis: #1d2a52;
+  --g-biru: #6b97ff;
+  --g-langit: #4cc9f0;
+  --g-hijau: #34d399;
+  --g-emas: #e8cc84;
+  --g-merah: #fb7185;
+  --g-ungu: #b49cff;
+  --g-kartu: #0e1730;
+
+  --color-slate-50: #101a38;
+  --color-slate-100: #16224a;
+  --color-slate-200: #22305c;
+  --color-slate-300: #33427a;
+  --color-slate-400: #8693bb;
+  --color-slate-500: #9eaace;
+  --color-slate-600: #b6c0de;
+  --color-slate-700: #cfd7ec;
+  --color-slate-800: #e5eaf7;
+  --color-slate-900: #f6f8ff;
+
+  --color-blue-50: #11224a;
+  --color-blue-100: #1a3068;
+  --color-blue-600: #6b97ff;
+  --color-blue-700: #93b6ff;
+  --color-sky-50: #0c2a3d;
+  --color-sky-200: #155e75;
+  --color-green-50: #0b2b25;
+  --color-green-600: #34d399;
+  --color-green-700: #6ee7b7;
+  --color-green-800: #a7f3d0;
+  --color-emerald-50: #0b2b25;
+  --color-emerald-200: #14503f;
+  --color-emerald-600: #34d399;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #a7f3d0;
+  --color-emerald-900: #bbf7d0;
+  --color-amber-50: #33260b;
+  --color-amber-200: #5c4410;
+  --color-amber-300: #7a5a14;
+  --color-amber-600: #fbbf24;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fde68a;
+  --color-amber-900: #fef3c7;
+  --color-red-50: #3a1320;
+  --color-red-100: #4a1a29;
+  --color-red-200: #6b2438;
+  --color-red-300: #ff8fa0;
+  --color-red-400: #ff7388;
+  --color-red-600: #ff8a9b;
+  --color-red-700: #ffa3b1;
+  --color-red-800: #ffb8c3;
+  --color-red-900: #ffd0d8;
+  --color-orange-800: #fdba74;
+
+  background:
+    radial-gradient(1100px 520px at 88% -10%, rgba(79, 124, 255, 0.16), transparent 60%),
+    radial-gradient(800px 460px at -8% 8%, rgba(232, 204, 132, 0.07), transparent 55%),
+    #070d1f;
+}
+
+/* Permukaan putih menjadi kartu gelap; text-white tetap putih karena memakai variabel yang sama. */
+.dark .bg-white { background-color: #0e1730; }
+.dark .bg-white\/70 { background-color: rgba(14, 23, 48, 0.7); }
+.dark .shadow-kartu {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 55%);
+  box-shadow: var(--shadow-kartu), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+.dark .bg-slate-50 { background-color: #101a38; }
+.dark .text-navy, .dark .text-primary { color: #9db8ff; }
+.dark .text-green, .dark .text-secondary { color: #7db1ff; }
+.dark .border-navy, .dark .focus\:border-navy:focus { border-color: #6b97ff; }
+.dark .bg-navy { background-color: #27409c; }
+.dark .bg-primary { background-color: #27409c; }
+.dark .bg-red-600 { background-color: #dc2626; }
+.dark .hover\:bg-red-700:hover { background-color: #b91c1c; }
+.dark .hover\:bg-slate-50:hover, .dark .hover\:bg-slate-50\/80:hover { background-color: #16224a; }
+.dark input, .dark select, .dark textarea { background-color: #0b1330; color: #f6f8ff; }
+.dark input::placeholder, .dark textarea::placeholder { color: #6f7ca6; }
+.dark ::selection { background: #2a3f9a; color: #fff; }
+
+/* Grafik Recharts mengikuti variabel tema. */
+.recharts-cartesian-grid line { stroke: var(--g-garis); }
+.recharts-text { fill: var(--g-teks); }
+.recharts-legend-item-text { color: var(--g-teks) !important; }

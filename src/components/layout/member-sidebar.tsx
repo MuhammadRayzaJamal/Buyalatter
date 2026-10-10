@@ -6,6 +6,7 @@ import { useState } from "react";
 import { signOut } from "next-auth/react";
 import { initials } from "@/lib/format";
 import { Logo } from "@/components/ui/logo";
+import { TombolTema } from "@/components/ui/tombol-tema";
 import { useSidebarCollapse } from "@/components/layout/use-sidebar-collapse";
 import { NotifikasiBell, type NotifikasiItem } from "@/components/layout/notifikasi-bell";
 import {
@@ -72,7 +73,7 @@ export function MemberSidebar({ memberName = "Anggota", memberFoto = null, notif
 
   const brand = (
     <Link aria-label="BuyaLater - Portal Anggota" href="/anggota/dashboard" className="flex items-center gap-2">
-      <span className={collapsed ? "lg:hidden" : ""}><Logo height={40} href={null} /></span>
+      <span className={collapsed ? "lg:hidden" : ""}><Logo adaptif height={40} href={null} /></span>
       {collapsed && <span className="hidden lg:inline"><Logo height={36} href={null} variant="ikon" /></span>}
       <small className={`text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${collapsed ? "lg:hidden" : ""}`}>Portal Anggota</small>
     </Link>
@@ -92,6 +93,7 @@ export function MemberSidebar({ memberName = "Anggota", memberFoto = null, notif
           <p className="text-xs text-secondary/70">Semoga harimu produktif.</p>
         </div>
       </div>
+      <TombolTema className={`mt-3 w-full ${collapsed ? "lg:px-0" : ""}`} label={!collapsed} />
       <button
         className={`mt-3 flex w-full items-center gap-2 text-xs font-bold text-secondary hover:underline ${collapsed ? "lg:justify-center" : ""}`}
         onClick={() => signOut({ callbackUrl: "/" })}
@@ -109,6 +111,7 @@ export function MemberSidebar({ memberName = "Anggota", memberFoto = null, notif
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white px-5 lg:hidden print:hidden">
         {brand}
         <div className="flex items-center gap-2">
+        <TombolTema />
         <NotifikasiBell items={notif.items} unread={notif.unread} />
         <button
           aria-expanded={open}

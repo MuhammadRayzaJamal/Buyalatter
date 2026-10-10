@@ -8,6 +8,7 @@ import { Award, MapPin, PanelBottom } from "lucide-react";
 import { initials } from "@/lib/format";
 import { bolehAkses, LABEL_PERAN, type Peran } from "@/lib/akses";
 import { Logo } from "@/components/ui/logo";
+import { TombolTema } from "@/components/ui/tombol-tema";
 import { useSidebarCollapse } from "@/components/layout/use-sidebar-collapse";
 import {
   IconArrowDownCircle,
@@ -104,7 +105,7 @@ export function AdminSidebar({ adminName = "Administrator", badges = {}, role = 
 
   const brand = (
     <Link aria-label="BuyaLater - Panel Admin" href="/admin/dashboard" className="flex items-center gap-2">
-      <span className={collapsed ? "lg:hidden" : ""}><Logo height={40} href={null} /></span>
+      <span className={collapsed ? "lg:hidden" : ""}><Logo adaptif height={40} href={null} /></span>
       {collapsed && <span className="hidden lg:inline"><Logo height={36} href={null} variant="ikon" /></span>}
       <small className={`text-[10px] font-semibold uppercase tracking-wider text-slate-400 ${collapsed ? "lg:hidden" : ""}`}>Panel Admin</small>
     </Link>
@@ -119,6 +120,7 @@ export function AdminSidebar({ adminName = "Administrator", badges = {}, role = 
           <p className="text-xs text-slate-400">{LABEL_PERAN[role]}</p>
         </div>
       </div>
+      <TombolTema className={`mt-3 w-full ${collapsed ? "lg:px-0" : ""}`} label={!collapsed} />
       <button
         className={`mt-3 flex w-full items-center gap-2 text-xs font-bold text-primary hover:underline ${collapsed ? "lg:justify-center" : ""}`}
         onClick={() => signOut({ callbackUrl: "/" })}
@@ -135,6 +137,7 @@ export function AdminSidebar({ adminName = "Administrator", badges = {}, role = 
     <>
       <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b bg-white px-5 lg:hidden print:hidden">
         {brand}
+        <div className="flex items-center gap-2"><TombolTema />
         <button
           aria-expanded={open}
           aria-label="Buka menu admin"
@@ -143,7 +146,7 @@ export function AdminSidebar({ adminName = "Administrator", badges = {}, role = 
           type="button"
         >
           <IconMenu />
-        </button>
+        </button></div>
       </header>
 
       {open && (

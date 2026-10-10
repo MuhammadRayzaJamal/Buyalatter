@@ -2,7 +2,7 @@
 
 ## BuyaLater
 
-**Versi:** 2.9  
+**Versi:** 3.0  
 **Tanggal:** 10 Oktober 2026  
 **Status:** Implementasi MVP akademik  
 **Bahasa produk:** Bahasa Indonesia
@@ -179,7 +179,7 @@ Seluruh halaman publik memiliki: Navbar berlogo (putih transparan dengan blur da
 
 | Route | Kebutuhan |
 | --- | --- |
-| `/admin/dashboard` | Statistik dan grafik simpanan/pinjaman per bulan |
+| `/admin/dashboard` | Dashboard eksekutif: 4 kartu statistik dengan sparkline, antrean kerja, kesehatan koperasi + meteran, tren simpanan masuk dan pinjaman cair 6 bulan, donat komposisi simpanan, status pinjaman, status angsuran, umur tunggakan, pertumbuhan anggota, 5 penabung terbesar, aktivitas terbaru |
 | `/admin/anggota` | Tabel, search, pagination, hapus |
 | `/admin/anggota/tambah` | Tambah anggota dan akun login |
 | `/admin/anggota/[id]` | Detail anggota dan ringkasan transaksi |
@@ -378,6 +378,7 @@ Nilai keuangan menggunakan `Decimal` MySQL untuk menghindari kesalahan floating 
 - Status transaksi menggunakan Badge dengan warna semantik.
 - Form memakai komponen Input, Button, Card, dan Table reusable.
 - Setiap halaman memiliki state loading dan error yang jelas.
+- **Mode gelap dan terang (tahap 15)**: panel admin dan portal anggota tampil **gelap secara bawaan** dan dapat diganti lewat tombol matahari/bulan di sidebar (di HP: di header). Pilihan disimpan di cookie `bl-tema` sehingga server merender tema yang sama tanpa kedip. Situs publik tetap terang. Implementasi: kelas `.dark` pada pembungkus layout yang memetakan ulang skala warna Tailwind (`src/app/globals.css`), logo otomatis berganti ke versi putih, dan grafik memakai variabel `--g-*`.
 - Layout harus responsif untuk desktop dan mobile. Di layar < 640px ukuran dasar huruf 14px (skala `rem` lebih kecil), kolom isian 16px agar iOS tidak memperbesar halaman saat fokus, dan viewport `width=device-width, viewport-fit=cover`; kartu statistik dan kartu beranda dibuat ringkas (ikon di samping teks).
 
 ## 11. Kebutuhan Non-fungsional
@@ -562,6 +563,7 @@ Urutan demo yang disarankan: (1) login sebagai Budi dan lihat dashboard, simulas
 | 12 | Dukungan Capacitor (Android/iOS) dengan mode kabel USB | Selesai |
 | 13 | Koperasi close loop: khusus anggota, bukan pinjol (copy, tagline, section "BuyaLater Bukan Pinjol", logo OJK sebagai acuan regulasi), bunga per tahun + metode + biaya admin + batas Permenkop UKM 8/2023, denda 0,05% dengan masa tenggang, Ringkasan Biaya sebelum akad, penagihan beretika (jadwal, hari libur, log, kata terlarang), persetujuan data, unduh data & penutupan akun, pengaduan, kesehatan koperasi, `/hak-anggota` | Selesai |
 | 14 | Login Google/Apple (anggota terdaftar saja), penyesuaian tampilan mobile (skala 14px, kartu ringkas, viewport), layar sambutan, batas laju + header keamanan, pembaruan paket, escape email, pendaftaran tidak membocorkan akun, data demo bertanggal relatif (baru), panduan login untuk penguji | Selesai |
+| 15 | Mode gelap/terang (bawaan gelap) untuk dashboard admin dan portal anggota, dashboard admin diperkaya 8 grafik (area, donat, batang, meteran, sparkline), grafik simpanan dan progres pelunasan di portal anggota | Selesai |
 
 ## 16. Roadmap Lanjutan
 
