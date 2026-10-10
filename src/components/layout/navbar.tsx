@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import { Button } from "../ui/button";
+import { TombolTema } from "@/components/ui/tombol-tema";
 import { Logo } from "../ui/logo";
 import { IconMenu, IconX } from "../ui/icons";
 
@@ -34,7 +35,7 @@ export function Navbar() {
   return (
     <header className={`sticky top-0 z-40 border-b transition-[background-color,box-shadow,backdrop-filter] duration-300 ${scrolled ? "border-transparent bg-white/70 shadow-[0_4px_20px_-8px_rgba(26,42,108,0.18)] backdrop-blur-xl" : "bg-white"}`}>
       <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-5 lg:px-8">
-        <Logo height={40} priority />
+        <Logo adaptif height={40} priority />
         <nav className="hidden items-center gap-7 text-sm font-semibold text-slate-600 md:flex">
           {links.map((link) => (
             <Link
@@ -47,6 +48,7 @@ export function Navbar() {
           ))}
         </nav>
         <div className="flex items-center gap-2">
+          <TombolTema />
           <Button className="hidden sm:inline-flex" href="/login" size="sm"><Lock aria-hidden className="h-3.5 w-3.5" />Masuk Anggota</Button>
           <button
             aria-expanded={open}

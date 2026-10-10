@@ -8,7 +8,7 @@ const SRC = { full: "/images/logo-buyalater.png", putih: "/images/logo-buyalater
 type LogoProps = { variant?: keyof typeof ASPECT; height?: number; href?: string | null; className?: string; priority?: boolean; adaptif?: boolean };
 
 /** Logo BuyaLater. `full` = logo lengkap, `putih` = untuk latar gelap, `ikon` = dompet B✓ saja. */
-export function Logo({ variant = "full", height = 40, href = "/", className = "", priority = false, adaptif = false }: LogoProps) {
+export function Logo({ variant = "full", height = 40, href = "/", className = "", priority = false, adaptif = true }: LogoProps) {
   // adaptif: logo berwarna di mode terang, versi putih di mode gelap (di dalam elemen .dark).
   const image = adaptif && variant === "full"
     ? <><Image alt="BuyaLater" className="w-auto shrink-0 dark:hidden" height={height} priority={priority} src={SRC.full} style={{ height, width: "auto" }} width={Math.round(height * ASPECT.full)} /><Image alt="BuyaLater" className="hidden w-auto shrink-0 dark:block" height={height} src={SRC.putih} style={{ height, width: "auto" }} width={Math.round(height * ASPECT.putih)} /></>

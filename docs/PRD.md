@@ -378,7 +378,7 @@ Nilai keuangan menggunakan `Decimal` MySQL untuk menghindari kesalahan floating 
 - Status transaksi menggunakan Badge dengan warna semantik.
 - Form memakai komponen Input, Button, Card, dan Table reusable.
 - Setiap halaman memiliki state loading dan error yang jelas.
-- **Mode gelap dan terang (tahap 15)**: panel admin dan portal anggota tampil **gelap secara bawaan** dan dapat diganti lewat tombol matahari/bulan di sidebar (di HP: di header). Pilihan disimpan di cookie `bl-tema` sehingga server merender tema yang sama tanpa kedip. Situs publik tetap terang. Implementasi: kelas `.dark` pada pembungkus layout yang memetakan ulang skala warna Tailwind (`src/app/globals.css`), logo otomatis berganti ke versi putih, dan grafik memakai variabel `--g-*`.
+- **Mode gelap dan terang (tahap 15)**: situs publik, panel admin, dan portal anggota tampil **gelap secara bawaan** dan dapat diganti lewat tombol matahari/bulan (di navbar situs publik, di sidebar/header dashboard). Pilihan disimpan di cookie `bl-tema` yang dipakai bersama oleh seluruh area, sehingga server merender tema yang sama tanpa kedip. Implementasi: kelas `.dark` pada pembungkus layout yang memetakan ulang skala warna Tailwind (`src/app/globals.css`), logo otomatis berganti ke versi putih, dan grafik memakai variabel `--g-*`.
 - Layout harus responsif untuk desktop dan mobile. Di layar < 640px ukuran dasar huruf 14px (skala `rem` lebih kecil), kolom isian 16px agar iOS tidak memperbesar halaman saat fokus, dan viewport `width=device-width, viewport-fit=cover`; kartu statistik dan kartu beranda dibuat ringkas (ikon di samping teks).
 
 ## 11. Kebutuhan Non-fungsional
@@ -563,7 +563,7 @@ Urutan demo yang disarankan: (1) login sebagai Budi dan lihat dashboard, simulas
 | 12 | Dukungan Capacitor (Android/iOS) dengan mode kabel USB | Selesai |
 | 13 | Koperasi close loop: khusus anggota, bukan pinjol (copy, tagline, section "BuyaLater Bukan Pinjol", logo OJK sebagai acuan regulasi), bunga per tahun + metode + biaya admin + batas Permenkop UKM 8/2023, denda 0,05% dengan masa tenggang, Ringkasan Biaya sebelum akad, penagihan beretika (jadwal, hari libur, log, kata terlarang), persetujuan data, unduh data & penutupan akun, pengaduan, kesehatan koperasi, `/hak-anggota` | Selesai |
 | 14 | Login Google/Apple (anggota terdaftar saja), penyesuaian tampilan mobile (skala 14px, kartu ringkas, viewport), layar sambutan, batas laju + header keamanan, pembaruan paket, escape email, pendaftaran tidak membocorkan akun, data demo bertanggal relatif (baru), panduan login untuk penguji | Selesai |
-| 15 | Mode gelap/terang (bawaan gelap) untuk dashboard admin dan portal anggota, dashboard admin diperkaya 8 grafik (area, donat, batang, meteran, sparkline), grafik simpanan dan progres pelunasan di portal anggota | Selesai |
+| 15 | Mode gelap/terang (bawaan gelap) untuk situs publik, dashboard admin, dan portal anggota, dashboard admin diperkaya 8 grafik (area, donat, batang, meteran, sparkline), grafik simpanan dan progres pelunasan di portal anggota | Selesai |
 
 ## 16. Roadmap Lanjutan
 

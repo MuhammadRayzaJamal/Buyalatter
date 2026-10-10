@@ -166,8 +166,6 @@ h4 {
 
   --color-slate-50: #101a38;
   --color-slate-100: #16224a;
-  --color-slate-200: #22305c;
-  --color-slate-300: #33427a;
   --color-slate-400: #8693bb;
   --color-slate-500: #9eaace;
   --color-slate-600: #b6c0de;
@@ -175,12 +173,9 @@ h4 {
   --color-slate-800: #e5eaf7;
   --color-slate-900: #f6f8ff;
 
-  --color-blue-50: #11224a;
-  --color-blue-100: #1a3068;
   --color-blue-600: #6b97ff;
   --color-blue-700: #93b6ff;
   --color-sky-50: #0c2a3d;
-  --color-sky-200: #155e75;
   --color-green-50: #0b2b25;
   --color-green-600: #34d399;
   --color-green-700: #6ee7b7;
@@ -234,6 +229,30 @@ h4 {
 .dark input, .dark select, .dark textarea { background-color: #0b1330; color: #f6f8ff; }
 .dark input::placeholder, .dark textarea::placeholder { color: #6f7ca6; }
 .dark ::selection { background: #2a3f9a; color: #fff; }
+
+/* Warna yang juga dipakai sebagai teks pada bagian gelap (hero, footer) tidak dipetakan lewat variabel,
+   hanya untuk properti latar/garis lewat kelas. */
+.dark .bg-slate-200 { background-color: #22305c; }
+.dark .border-slate-200, .dark .ring-slate-200 { border-color: #22305c; --tw-ring-color: #22305c; }
+.dark .border-slate-300 { border-color: #33427a; }
+.dark .bg-blue-50 { background-color: #11224a; }
+.dark .bg-blue-50\/60 { background-color: rgba(17, 34, 74, 0.6); }
+.dark .bg-blue-100 { background-color: #1a3068; }
+.dark .ring-blue-100, .dark .focus\:ring-blue-100:focus { --tw-ring-color: #1a3068; }
+.dark .bg-accent.text-navy, .dark .bg-accent .text-navy { color: #0b1438; }
+.dark .border-sky-200 { border-color: #155e75; }
+.dark .hover\:bg-blue-50:hover { background-color: #16224a; }
+
+/* Situs publik: latar arbitrer dan gradasi yang memakai putih/biru muda. */
+.dark .bg-\[\#F7F8FC\] { background-color: #0b1330; }
+.dark .from-white { --tw-gradient-from: #0e1730; }
+.dark .via-white { --tw-gradient-via: #0e1730; }
+.dark .to-white { --tw-gradient-to: #0e1730; }
+.dark .from-blue-50 { --tw-gradient-from: #11224a; }
+.dark .from-blue-100 { --tw-gradient-from: #1a3068; }
+.dark .to-sky-50 { --tw-gradient-to: #0c2a3d; }
+.dark .to-sky-100 { --tw-gradient-to: #12405f; }
+.dark .shadow-sm { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5); }
 
 /* Grafik Recharts mengikuti variabel tema. */
 .recharts-cartesian-grid line { stroke: var(--g-garis); }
