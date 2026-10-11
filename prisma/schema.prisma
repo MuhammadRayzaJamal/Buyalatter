@@ -825,3 +825,13 @@ model Pengaduan {
   @@index([anggotaId, createdAt])
   @@index([status, createdAt])
 }
+
+/// Gambar konten publik (galeri, berita, banner, testimoni, mitra) yang diunggah admin; disimpan di database agar berjalan di hosting serverless.
+model GambarPublik {
+  id        String   @id @default(uuid())
+  folder    String
+  mime      String
+  ukuran    Int
+  isi       Bytes    @db.LongBlob
+  createdAt DateTime @default(now())
+}

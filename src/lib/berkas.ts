@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import type { KategoriBerkas } from "@prisma/client";
 import { GalatBisnis } from "@/lib/aksi";
@@ -60,18 +60,15 @@ export async function buangBerkasPrivat(url: string | null | undefined) {
 const GAMBAR_PUBLIK = [JPEG, PNG, WEBP, GIF];
 const MAKS_GAMBAR_PUBLIK = 5 * 1024 * 1024;
 
-/** Gambar konten publik tetap di public/uploads, tetapi tipenya diperiksa lewat magic bytes. */
+/** Gambar konten publik disimpan di tabel GambarPublik (tipenya diperiksa lewat magic bytes) dan dilayani lewat `/api/gambar/<id>`. */
 export async function simpanGambarPublik(file: File, folder: "galeri" | "berita" | "banner" | "testimoni" | "mitra") {
   if (file.size === 0) return null;
   if (file.size > MAKS_GAMBAR_PUBLIK) throw new GalatBisnis("Ukuran gambar maksimal 5MB.");
   const buffer = Buffer.from(await file.arrayBuffer());
   const jenis = deteksiJenis(buffer);
   if (!jenis || !GAMBAR_PUBLIK.some((j) => j.mime === jenis.mime)) throw new GalatBisnis("Format gambar harus JPG, PNG, WEBP, atau GIF.");
-  const dir = path.join(process.cwd(), "public", "uploads", folder);
-  await mkdir(dir, { recursive: true });
-  const namaFile = `${randomUUID()}.${jenis.ext}`;
-  await writeFile(path.join(dir, namaFile), buffer);
-  return `/uploads/${folder}/${namaFile}`;
+  const gambar = await prisma.gambarPublik.create({ data: { folder, mime: jenis.mime, ukuran: buffer.length, isi: buffer } });
+  return `/api/gambar/${gambar.id}`;
 }
 
 /** Tipe MIME berkas privat dari URL `/api/file/<id>` (untuk memutuskan tampil sebagai gambar atau tautan PDF). */
