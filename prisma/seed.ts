@@ -611,7 +611,7 @@ async function main() {
         { id: "seed-notifikasi-04", userId: "seed-user-anggota-001", tipe: "INFO", judul: "Selamat datang di BuyaLater", pesan: "Akun kamu sudah aktif. Lengkapi profil dan rekening bank untuk mulai mengajukan pinjaman.", link: "/anggota/profil", sudahDibaca: true, createdAt: kemarin },
       ],
     });
-  });
+  }, { timeout: 900000, maxWait: 60000 });
 
   await buatDataDemoTunggakan(prisma);
 
