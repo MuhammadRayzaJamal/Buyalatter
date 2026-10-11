@@ -630,6 +630,8 @@ model BerkasPrivat {
   mime           String
   ukuran         Int
   diunggahOlehId String
+  /// Isi berkas disimpan di database agar berjalan di hosting serverless (sistem file hanya-baca). Berkas lama tetap dibaca dari storage/private.
+  isi            Bytes?         @db.LongBlob
   createdAt      DateTime       @default(now())
 
   anggota Anggota @relation(fields: [anggotaId], references: [id], onDelete: Cascade)

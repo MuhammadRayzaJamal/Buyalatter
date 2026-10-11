@@ -20,8 +20,8 @@ export const urlBerkas = (id: string) => `/api/file/${id}`;
 export const idDariUrlBerkas = (url: string | null | undefined) => (url?.startsWith("/api/file/") ? url.slice("/api/file/".length) : null);
 
 /**
- * Menyimpan berkas ke storage/private (di luar public/) dengan nama UUID acak, memeriksa magic bytes dan ukuran,
- * lalu mencatat pemilik di tabel BerkasPrivat. Mengembalikan URL `/api/file/<id>`.
+ * Menyimpan berkas privat di tabel BerkasPrivat (bukan di public/) dengan nama UUID acak, memeriksa magic bytes dan ukuran,
+ * lalu mencatat pemilik. Mengembalikan URL `/api/file/<id>`, yang hanya dilayani untuk pemilik dan staf berwenang.
  */
 export async function simpanBerkasPrivat(file: File, kategori: KategoriBerkas, anggotaId: string, diunggahOlehId: string) {
   const aturan = ATURAN[kategori];
@@ -33,14 +33,12 @@ export async function simpanBerkasPrivat(file: File, kategori: KategoriBerkas, a
 
   const id = randomUUID();
   const namaFile = `${id}.${jenis.ext}`;
-  const folder = path.join(AKAR_PRIVAT, kategori.toLowerCase());
-  await mkdir(folder, { recursive: true });
-  await writeFile(path.join(folder, namaFile), buffer);
-  await prisma.berkasPrivat.create({ data: { id, kategori, anggotaId, namaFile, mime: jenis.mime, ukuran: buffer.length, diunggahOlehId } });
+  await prisma.berkasPrivat.create({ data: { id, kategori, anggotaId, namaFile, mime: jenis.mime, ukuran: buffer.length, diunggahOlehId, isi: buffer } });
   return urlBerkas(id);
 }
 
-export async function bacaBerkasPrivat(berkas: { kategori: KategoriBerkas; namaFile: string }) {
+export async function bacaBerkasPrivat(berkas: { kategori: KategoriBerkas; namaFile: string; isi?: Uint8Array | null }) {
+  if (berkas.isi) return Buffer.from(berkas.isi);
   try {
     return await readFile(path.join(AKAR_PRIVAT, berkas.kategori.toLowerCase(), path.basename(berkas.namaFile)));
   } catch {
