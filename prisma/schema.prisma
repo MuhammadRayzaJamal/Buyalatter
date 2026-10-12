@@ -835,3 +835,12 @@ model GambarPublik {
   isi       Bytes    @db.LongBlob
   createdAt DateTime @default(now())
 }
+
+/// Catatan permintaan untuk pembatas laju lintas instance (serverless): satu baris per permintaan yang dihitung.
+model BatasLaju {
+  id        String   @id @default(uuid())
+  kunci     String
+  createdAt DateTime @default(now())
+
+  @@index([kunci, createdAt])
+}

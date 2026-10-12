@@ -3,6 +3,7 @@ import Apple from "next-auth/providers/apple";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import bcrypt from "bcrypt";
+import { catatKunci, hitungKunci } from "@/lib/batas-laju";
 import { catatLogin, sisaMenitKunci } from "@/lib/login-aman";
 import { prisma } from "@/lib/prisma";
 import { loginSchema } from "@/lib/validasi";
@@ -14,6 +15,9 @@ export class AkunTerkunci extends CredentialsSignin {
 
 /** Sesi berakhir bila tidak ada aktivitas 30 menit: token berumur 30 menit dan diperpanjang tiap kali sesi dipakai (maks. sekali per menit). */
 const SESI_DETIK = 30 * 60;
+
+/** Batas percobaan login gagal per alamat IP dalam 15 menit (di atas penguncian per akun). */
+const BATAS_GAGAL_PER_IP = 20;
 
 // Peringatan keras bila server production berjalan dengan secret bawaan/pendek (token sesi bisa dipalsukan).
 if (process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
@@ -42,6 +46,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const ip = request?.headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || request?.headers?.get("x-real-ip") || null;
 
       if ((await sisaMenitKunci(email)) > 0) throw new AkunTerkunci();
+      // Tameng penebakan sandi lintas akun: terlalu banyak kegagalan dari satu IP dalam 15 menit memblokir IP itu sementara.
+      const kunciIp = ip ? `login-gagal:${ip}` : null;
+      if (kunciIp && (await hitungKunci(kunciIp, 15 * 60_000).catch(() => 0)) >= BATAS_GAGAL_PER_IP) throw new AkunTerkunci();
 
       const user = await prisma.user.findUnique({ where: { email }, include: { anggota: true } });
       const cocok = user ? await bcrypt.compare(password, user.password) : false;
@@ -49,6 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       const aktif = user && !(user.role === "ANGGOTA" && (!user.anggota || user.anggota.deletedAt || user.anggota.ditutupPada));
       if (!user || !cocok || !aktif) {
         await catatLogin(email, false, ip);
+        if (kunciIp) await catatKunci(kunciIp).catch(() => undefined);
         if ((await sisaMenitKunci(email)) > 0) throw new AkunTerkunci();
         return null;
       }
