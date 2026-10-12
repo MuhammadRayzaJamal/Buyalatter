@@ -11,10 +11,16 @@ export type { Peran } from "@/lib/akses";
  * agar perubahan peran langsung berlaku. Belum login → /login; peran tidak sesuai → 404 (bukan 403) supaya
  * keberadaan halaman tidak terbongkar.
  */
+/** Sesi yang diterbitkan sebelum password direset dianggap tidak sah, sehingga token curian ikut mati saat password diganti. */
+function sesiMasihSah(terbit: number | undefined, sandiDiubahPada: Date | null) {
+  return !sandiDiubahPada || (terbit !== undefined && terbit >= sandiDiubahPada.getTime());
+}
+
 export async function requireRole(...peran: readonly Peran[]) {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, nama: true, email: true, role: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, nama: true, email: true, role: true, sandiDiubahPada: true } });
+  if (user && !sesiMasihSah(session.user.terbit, user.sandiDiubahPada)) redirect("/login");
   if (!user || !peran.includes(user.role)) notFound();
   return user;
 }
@@ -31,8 +37,8 @@ export async function requireAnggota() {
 export async function cobaRole(...peran: readonly Peran[]) {
   const session = await auth();
   if (!session?.user?.id) return null;
-  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, nama: true, email: true, role: true } });
-  return user && peran.includes(user.role) ? user : null;
+  const user = await prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, nama: true, email: true, role: true, sandiDiubahPada: true } });
+  return user && sesiMasihSah(session.user.terbit, user.sandiDiubahPada) && peran.includes(user.role) ? user : null;
 }
 
 export async function cobaAnggota() {

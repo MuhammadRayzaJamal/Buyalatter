@@ -13,6 +13,7 @@ declare module "next-auth" {
       id: string;
       role: Peran;
       anggotaId?: string;
+      terbit?: number;
     } & DefaultSession["user"];
   }
 }
@@ -22,5 +23,6 @@ declare module "next-auth/jwt" {
     id: string;
     role: Peran;
     anggotaId?: string;
+    terbit?: number;
   }
 }

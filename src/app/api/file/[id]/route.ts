@@ -24,10 +24,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!/^[0-9a-f-]{36}$/.test(id)) return tidakDitemukan();
 
   const [user, berkas] = await Promise.all([
-    prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, role: true } }),
+    prisma.user.findUnique({ where: { id: session.user.id }, select: { id: true, role: true, sandiDiubahPada: true } }),
     prisma.berkasPrivat.findUnique({ where: { id }, include: { anggota: { select: { userId: true } } } }),
   ]);
   if (!user || !berkas) return tidakDitemukan();
+  if (user.sandiDiubahPada && !((session.user.terbit ?? 0) >= user.sandiDiubahPada.getTime())) return NextResponse.json({ message: "Silakan login terlebih dahulu." }, { status: 401 });
 
   const pemilik = user.role === "ANGGOTA" && berkas.anggota.userId === user.id;
   const staf = (STAF_PER_KATEGORI[berkas.kategori] ?? []).includes(user.role);

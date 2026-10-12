@@ -87,12 +87,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           token.role = db.role;
           token.anggotaId = db.anggota?.id;
         }
+        token.terbit = Date.now();
         return token;
       }
       if (user) {
         token.id = user.id as string;
         token.role = user.role;
         token.anggotaId = user.anggotaId;
+        token.terbit = Date.now();
       }
       return token;
     },
@@ -101,6 +103,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string;
         session.user.role = token.role as "ADMIN" | "MANAJER" | "TELLER" | "ANGGOTA";
         session.user.anggotaId = token.anggotaId as string | undefined;
+        session.user.terbit = token.terbit as number | undefined;
       }
       return session;
     },

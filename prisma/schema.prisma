@@ -65,6 +65,8 @@ model User {
   email     String   @unique
   password  String
   role      Role     @default(ANGGOTA)
+  /// Sesi yang dibuat sebelum waktu ini dianggap tidak sah (diisi saat password direset).
+  sandiDiubahPada DateTime?
   createdAt DateTime @default(now())
 
   anggota                Anggota?
