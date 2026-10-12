@@ -455,6 +455,8 @@ Password akun anggota dibuat sama untuk kebutuhan demo lokal. Pada aplikasi nyat
 
 ### Panduan login dan alur uji untuk penguji
 
+> **Catatan situs online** (`https://buyalatter.vercel.app`): sandi akun staf (admin, manajer, teller) di situs online sudah diganti demi keamanan dan diberikan langsung oleh pengembang. Sandi pada panduan di bawah berlaku untuk instalasi lokal (`localhost:3000`) dan untuk akun anggota contoh di situs online.
+
 Aplikasi memiliki **satu halaman login** (`/login`) untuk semua peran. Sistem yang menentukan tujuan setelah masuk berdasarkan peran akun.
 
 **Cara login sebagai anggota**
