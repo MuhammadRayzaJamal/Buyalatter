@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { ulangiBilaKoneksiPutus } from "@/lib/ulangi-koneksi";
 
 const SOFT_DELETE_MODEL = new Set(["Anggota", "Galeri", "Artikel", "Mitra"]);
 const BACA_FILTER = ["findMany", "findFirst", "findFirstOrThrow", "findUnique", "findUniqueOrThrow", "count", "aggregate", "groupBy"];
@@ -23,7 +24,7 @@ function buatClient() {
           if ((model === "Mutasi" || model === "AuditLog") && APPEND_ONLY.includes(operation)) {
             throw new Error(`${model} bersifat append-only dan tidak dapat diubah atau dihapus.`);
           }
-          return query(args);
+          return ulangiBilaKoneksiPutus(() => query(args));
         },
       },
     },
